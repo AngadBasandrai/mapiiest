@@ -237,9 +237,12 @@ export class SearchIndex {
       ['cycle', 'cycle parking'],
     ]
     const out = wanted.filter(([cat]) => counts[cat]).map(([, word]) => word)
-    // Nothing on the map yet: suggest the things that do exist — the commands
-    // for putting something on it.
-    if (!out.length) return ['tag mode', 'satellite', 'my tags', 'about']
+    // Nothing on the map: suggest the commands, which always exist.
+    if (!out.length) {
+      return import.meta.env.DEV
+        ? ['tag mode', 'satellite', 'my tags', 'about']
+        : ['satellite', 'about']
+    }
     return out.slice(0, 6)
   }
 }
@@ -274,16 +277,28 @@ const ALIASES: Record<string, string[]> = {
   green: ['park', 'garden', 'green', 'lawn', 'maath'],
 }
 
-const ACTIONS = [
+interface Action { id: string; title: string; sub: string; words: string }
+
+/**
+ * The surveying commands. Kept in their own array so that the ternary below
+ * folds to `[]` in a build and the whole thing tree-shakes out — a `dev` flag
+ * filtered at runtime would leave all this wording in the bundle, describing a
+ * feature the published site does not have.
+ */
+const DEV_ACTIONS: Action[] = [
+  { id: 'tag-mode', title: 'Tag mode', sub: 'Tap the map to add a missing place', words: 'tag add missing new mark edit survey contribute' },
+  { id: 'tags', title: 'My tags', sub: 'Export or delete the places you tagged', words: 'tags mine saved export json download list' },
+  { id: 'tags-clear', title: 'Delete all my tags', sub: 'Clears every tag in this browser', words: 'delete remove clear wipe reset all tags' },
+]
+
+const ACTIONS: Action[] = [
   { id: 'locate', title: 'Find my location', sub: 'Centre the map on you', words: 'gps where am i me here' },
   // "google" and "google maps" are in here on purpose: it is what people type
   // when they mean "show me the actual photo of this place".
   { id: 'imagery', title: 'Satellite imagery', sub: 'Aerial photo under the map', words: 'satellite aerial imagery photo google maps earth view real' },
-  { id: 'tag-mode', title: 'Tag mode', sub: 'Tap the map to add a missing place', words: 'tag add missing new mark edit survey contribute' },
-  { id: 'tags', title: 'My tags', sub: 'Export or delete the places you tagged', words: 'tags mine saved export json download list' },
-  { id: 'tags-clear', title: 'Delete all my tags', sub: 'Clears every tag in this browser', words: 'delete remove clear wipe reset all tags' },
   { id: 'layers-all', title: 'Show every layer', sub: 'Turn all categories on', words: 'all layers everything show' },
   { id: 'layers-none', title: 'Hide every layer', sub: 'Clear the map', words: 'none clear hide reset layers' },
   { id: 'clear-route', title: 'Clear route', sub: 'Remove the drawn path', words: 'route clear cancel remove path' },
   { id: 'about', title: 'About & data sources', sub: 'Where every number comes from', words: 'about data source credit osm attribution help' },
+  ...(import.meta.env.DEV ? DEV_ACTIONS : []),
 ]

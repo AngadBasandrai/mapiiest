@@ -20,18 +20,14 @@ const argOf = (k, d) => {
 const URL_ = argOf('url', 'http://localhost:5180/')
 const SHOTS = process.argv.includes('--shot')
 
-// A query the current data can always answer. Places may be absent entirely —
-// this map is built to start empty and be filled in by hand — but the command
-// palette always has its own commands in it.
 const campus = JSON.parse(await readFile(join(ROOT, 'public/data/campus.json'), 'utf8'))
-const QUERY = 'satellite'
-const TAG_NAME = 'Verify Test Place'
-// Tag into a category nothing currently lives in, so the run can prove a layer
-// chip appears with the first place in it and disappears with the last. Falls
-// back to any category when the map is already full, dropping those two checks.
-const TAG_CAT = Object.keys(campus.categories)
-  .find((c) => !campus.pois.some((p) => p.cat === c))
-const TAG_CAT_IS_NEW = !!TAG_CAT
+
+// Drive a real place from the current data rather than a hard-coded name, so
+// this does not rot when the survey changes. Falls back to a command, which
+// always exists, on a map with nothing on it.
+const PLACE = campus.pois.find((p) => campus.categories[p.cat]?.pin && p.name.length > 6)
+  ?? campus.pois[0]
+const QUERY = PLACE?.name ?? 'satellite'
 
 const CHROME = [
   process.env.CHROME_PATH,
@@ -252,8 +248,52 @@ async function check(name, width, height, theme) {
         { timeout: 4000 }).catch(() => {})
     }
 
-    // Opening a result is exercised further down against a real place — this
-    // query returns commands, and running one would fight the imagery check.
+    // Open the top result. On a map with places that is a place, and the panel,
+    // the route and the map label all hang off it.
+    await page.keyboard.press('Enter')
+    const panelUp = await page.waitForFunction(
+      () => document.getElementById('panel') && !document.getElementById('panel').hidden,
+      { timeout: 4000 },
+    ).then(() => true).catch(() => false)
+    ok(panelUp, 'selecting a result opens the panel')
+
+    const title = await page.evaluate(() =>
+      document.querySelector('#panel h2')?.textContent?.trim() ?? '')
+    ok(title === QUERY, 'the panel shows the place that was searched for', title)
+
+    // Labels are the thing a broken glyph URL silently kills.
+    const labelled = await page.waitForFunction(
+      () => window.__map?.queryRenderedFeatures({ layers: ['poi-label'] }).length > 0,
+      { timeout: 15_000 },
+    ).then(() => true).catch(() => false)
+    const labelCount = await page.evaluate(() =>
+      window.__map.queryRenderedFeatures({ layers: ['poi-label'] }).length)
+    ok(labelled, `map labels rendering (${labelCount})`,
+       labelled ? '' : 'glyphs failed or minzoom too high')
+
+    const hasRoute = await page.$('#panel [data-route]') !== null
+    ok(hasRoute, 'panel offers a route button')
+    if (hasRoute) {
+      await page.click('#panel [data-route]')
+      const routed = await page.waitForFunction(
+        () => { const b = document.getElementById('route-badge'); return b && !b.hidden },
+        { timeout: 4000 },
+      ).then(() => true).catch(() => false)
+      const eta = await page.evaluate(() =>
+        document.querySelector('#route-badge .eta')?.textContent ?? '')
+      ok(routed && eta !== '', 'routing draws a path with an ETA', eta)
+    }
+
+    // Nothing on a published map may edit it. Surveying was a build-time tool.
+    const editable = await page.evaluate(() => ({
+      button: !!document.getElementById('tag-btn'),
+      del: !!document.querySelector('#panel [data-tag-del]'),
+      stored: localStorage.getItem('campusmap.tags.v1'),
+    }))
+    ok(!editable.button, 'no tag button on the published site')
+    ok(!editable.del, 'no delete control on a place')
+    ok(editable.stored === null, 'nothing written to tag storage')
+
     await page.keyboard.press('Escape')
   }
 
@@ -291,113 +331,6 @@ async function check(name, width, height, theme) {
     credit: document.getElementById('imagery-credit').hidden,
   }))
   ok(off.visible === 'none' && off.campusFill === 1 && off.credit, 'and back off cleanly')
-
-  /* ── tagging ───────────────────────────────────────────────────────── */
-
-  await page.click('#tag-btn')
-  const tagOn = await page.evaluate(() =>
-    document.getElementById('tag-btn').getAttribute('aria-pressed') === 'true' &&
-    document.body.classList.contains('tagging'))
-  ok(tagOn, 'tag mode switches on')
-
-  // Tap the middle of the map, which is inside the campus at the default frame.
-  await page.mouse.click(Math.round(width / 2), Math.round(height / 2))
-  const formUp = await page.waitForSelector('#tag-name', { timeout: 4000 })
-    .then(() => true).catch(() => false)
-  ok(formUp, 'tapping the map opens the tag form')
-
-  if (formUp) {
-    await page.type('#tag-name', TAG_NAME, { delay: 8 })
-    await page.select('#tag-cat', TAG_CAT ?? 'canteen')
-    await page.click('[data-tag-save]')
-
-    const saved = await page.waitForFunction(
-      () => document.querySelectorAll('#panel .tag-row').length > 0,
-      { timeout: 4000 },
-    ).then(() => true).catch(() => false)
-    ok(saved, 'saving lists the tag')
-
-    const after = await page.evaluate(() => ({
-      count: document.querySelector('#tag-btn .n')?.textContent,
-      stored: JSON.parse(localStorage.getItem('campusmap.tags.v1') ?? '[]').length,
-      // A tag in a category the OSM extract has none of must bring that layer
-      // into being, or the pin is saved and then never drawn.
-      chips: [...document.querySelectorAll('#layer-chips .chip')].map((c) => c.dataset.cat),
-      tagMode: document.body.classList.contains('tagging'),
-    }))
-    ok(after.count === '1' && after.stored === 1, 'tag persists and is counted', `badge ${after.count}`)
-    if (TAG_CAT_IS_NEW) {
-      ok(after.chips.includes(TAG_CAT), `a new category (${TAG_CAT}) gains its own layer chip`)
-    }
-    ok(!after.tagMode, 'tag mode switches itself off after a save')
-
-    // Labels are the thing a broken glyph URL silently kills, and on a map that
-    // starts empty a tagged place is the first label there is to draw.
-    // Poll rather than waiting for `idle`: tag mode switches the aerial layer
-    // on, and a map with raster tiles in flight may not go idle for a while.
-    const labelled = await page.waitForFunction(
-      () => window.__map?.queryRenderedFeatures({ layers: ['poi-label'] }).length > 0,
-      { timeout: 15_000 },
-    ).then(() => true).catch(() => false)
-    const labels = await page.evaluate(() =>
-      window.__map.queryRenderedFeatures({ layers: ['poi-label'] }).map((f) => f.properties.name))
-    ok(labelled, `the tagged place draws a map label (${labels.length})`,
-       labelled ? labels[0] : 'glyphs failed or minzoom too high')
-
-    // And it must be findable like anything else on the map.
-    await page.keyboard.down('Meta'); await page.keyboard.press('KeyK'); await page.keyboard.up('Meta')
-    await page.waitForFunction(() => !document.getElementById('palette').hidden, { timeout: 3000 })
-    await page.type('#palette-input', 'Verify Test', { delay: 8 })
-    await page.waitForFunction(() => document.querySelectorAll('#palette-results .row').length > 0,
-      { timeout: 4000 }).catch(() => {})
-    const found = await page.$$eval('#palette-results .row-title', (r) => r.map((x) => x.textContent))
-    ok(found.some((t) => new RegExp(TAG_NAME).test(t ?? '')), 'a tagged place is searchable at once',
-       found[0] ?? 'nothing')
-
-    // Open it from search: the panel, the route and the delete all hang off a
-    // real place, which on this map only exists once you have made one.
-    await page.keyboard.press('Enter')
-    const panelUp = await page.waitForFunction(
-      () => document.getElementById('panel') && !document.getElementById('panel').hidden,
-      { timeout: 4000 },
-    ).then(() => true).catch(() => false)
-    ok(panelUp, 'selecting it opens the panel')
-
-    const hasRoute = await page.$('#panel [data-route]') !== null
-    ok(hasRoute, 'panel offers a route button')
-    if (hasRoute) {
-      await page.click('#panel [data-route]')
-      const routed = await page.waitForFunction(
-        () => { const b = document.getElementById('route-badge'); return b && !b.hidden },
-        { timeout: 4000 },
-      ).then(() => true).catch(() => false)
-      const eta = await page.evaluate(() =>
-        document.querySelector('#route-badge .eta')?.textContent ?? '')
-      ok(routed && eta !== '', 'routing to a tagged place draws a path with an ETA', eta)
-    }
-
-    const hasDelete = await page.$('#panel [data-tag-del]') !== null
-    ok(hasDelete, 'a tagged place offers Delete on its own panel')
-
-    if (hasDelete) {
-      await page.click('#panel [data-tag-del]')
-      const gone = await page.evaluate(() => ({
-        stored: JSON.parse(localStorage.getItem('campusmap.tags.v1') ?? '[]').length,
-        badge: document.querySelector('#tag-btn .n')?.textContent,
-        // The layer it brought into being goes with it.
-        chips: [...document.querySelectorAll('#layer-chips .chip')].map((c) => c.dataset.cat),
-        pins: window.__map?.getSource('pois')?._data?.features
-          ?.filter((f) => /Verify Test/.test(f.properties.name)).length,
-      }))
-      ok(gone.stored === 0 && gone.badge === '', 'deleting removes it everywhere', `badge "${gone.badge}"`)
-      if (TAG_CAT_IS_NEW) {
-        ok(!gone.chips.includes(TAG_CAT), 'and takes its now-empty layer chip with it')
-      }
-      ok(gone.pins === 0, 'and the pin leaves the map')
-    }
-
-    await page.evaluate(() => localStorage.removeItem('campusmap.tags.v1'))
-  }
 
   if (SHOTS) {
     await page.keyboard.press('Escape')

@@ -71,7 +71,7 @@ function routeButtons(lat: number, lon: number, label: string, tagId?: string) {
       class="${s.active ? 'on' : ''}">${s.active && s.eta != null
         ? `${humanEta(s.eta)} · ${humanDistance(s.metres!)}`
         : 'Route here'}</button>
-    ${tagId ? `<button data-tag-del="${esc(tagId)}" class="danger">Delete tag</button>` : ''}
+    ${import.meta.env.DEV && tagId ? `<button data-tag-del="${esc(tagId)}" class="danger">Delete tag</button>` : ''}
   </div>`
 }
 
@@ -102,7 +102,10 @@ export function showPoi(p: Poi) {
       ['Near', p.near ? esc(p.near) : undefined],
     ]),
     p.desc ? `<p class="p-note">${esc(p.desc)}</p>` : '',
-    p.user
+    // `p.user` is only ever set by the dev-only tagger, so this branch cannot be
+    // reached in a build — the guard is what keeps its wording out of the
+    // bundle, rather than shipping dead text about a feature the site lacks.
+    import.meta.env.DEV && p.user
       ? `<p class="src">Your tag, saved in this browser only. See them all in
          <button data-tag-list class="linkish">My tags</button>, or
          <a href="https://www.openstreetmap.org/edit#map=19/${p.lat.toFixed(5)}/${p.lon.toFixed(5)}"
@@ -127,13 +130,13 @@ export function showAbout(campus: Campus) {
 
     <div class="p-sec">Map &amp; places</div>
     ${total === 0
-      ? `<p class="p-note">This map deliberately starts with <b>no places on it</b>.
-         The ground, the buildings, the paths and the lakes are drawn from
+      ? `<p class="p-note">There are <b>no places on this map yet</b>. The ground,
+         the buildings, the paths and the lakes are drawn from
          <a href="${OSM_CAMPUS_URL}" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL),
-         but every <em>place</em> — every named, searchable, routable pin — is put
-         on by hand. Turn on tag mode in the top bar to add one. Walking and
-         cycling times are computed over the OSM path network, so routing works
-         from the first tag onwards.</p>`
+         but every <em>place</em> — every named, searchable, routable pin — is
+         surveyed by hand and committed to the repository, and that has not
+         happened yet. Walking and cycling times are computed over the OSM path
+         network, so routing works as soon as the first one lands.</p>`
       : `<p class="p-note"><b>${total}</b> places inside the campus wall, of which
          <b>${total - seeded}</b> come straight from
          <a href="${OSM_CAMPUS_URL}" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)
@@ -150,12 +153,18 @@ export function showAbout(campus: Campus) {
     on — those tiles come from Esri's World Imagery, the layer OpenStreetMap's
     own editor uses for tracing.</p>
 
-    <div class="p-sec">Tagging</div>
-    <p class="p-note">Found something the map is missing? Turn on tag mode in the
-    top bar and tap it. Tags are stored in this browser alone — nothing is
-    uploaded — and export as a <code>data/curated/places.json</code> fragment
-    from <b>My tags</b> in search. Anything real and permanent is better off in
-    OpenStreetMap itself, and every tag form links straight there.</p>
+    <div class="p-sec">Where the places came from</div>
+    <p class="p-note">Every place here was walked and recorded on campus, then
+    committed to <code>data/curated/places.json</code> in the repository. Nothing
+    was guessed from a name or inferred from a footprint. If something is wrong
+    or missing, it is a change to that file —
+    <a href="${esc(SITE.repo)}/issues" target="_blank" rel="noopener">open an issue</a>.</p>
+
+    ${import.meta.env.DEV ? `<div class="p-sec">Tag mode (dev build)</div>
+    <p class="p-note">This build has the surveying tool switched on: tag mode in
+    the top bar, tags kept in this browser only, exported as a
+    <code>places.json</code> fragment from <b>My tags</b> in search. It is not
+    part of the published site.</p>` : ''}
 
     <div class="p-sec">Coverage is thin — help fix it</div>
     <p class="p-note">${SITE.name} is far less mapped than it deserves. Most of the

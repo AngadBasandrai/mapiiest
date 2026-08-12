@@ -6,7 +6,6 @@ import { Router, humanEta, humanDistance } from './route/router'
 import { SearchIndex, type Hit } from './search/engine'
 import { initPalette, openPalette } from './ui/palette'
 import { initPanel, showAbout, showPoi, hidePanel } from './ui/panel'
-import { initTagger, showTagForm, showTagList, clearAllTags, tagPois, tagCount, onTagsChange } from './ui/tagger'
 import { cycle as cycleTheme, current as themeChoice, onThemeChange, resolved } from './ui/theme'
 import { SITE, onCampus, panBounds } from './config'
 
@@ -28,17 +27,21 @@ async function start() {
 
   const router = new Router(graphData)
 
-  // Places you tagged sit alongside the OSM ones everywhere: on the map, in
-  // search, in the panel. `campus.pois` stays untouched as the record of what
-  // actually came out of the build.
-  initTagger(campus)
   let pois: Poi[] = []
   let byId = new Map<string, Poi>()
-  /** Per-category totals including your tags, so a tag in an empty category
-   *  brings that layer into existence rather than landing invisibly. */
+  /** Per-category totals, so a category with nothing in it grows no layer. */
   let counts: Record<string, number> = {}
+
+  /**
+   * Places from the in-browser tagger, which exists in a dev build only. The
+   * survey it was built for is finished and committed to data/curated, so the
+   * published site has no way to add or remove anything — it just shows what
+   * the build produced.
+   */
+  let taggedPois: () => Poi[] = () => []
+
   function refreshPoiList() {
-    pois = [...campus.pois, ...tagPois()]
+    pois = [...campus.pois, ...taggedPois()]
     byId = new Map(pois.map((p) => [p.id, p]))
     counts = {}
     for (const p of pois) counts[p.cat] = (counts[p.cat] ?? 0) + 1
@@ -149,7 +152,8 @@ async function start() {
              title="${meta.label} · ${counts[c]}">
              <span class="dot"></span>${meta.label}<span class="n">${counts[c]}</span>
            </button>`).join('')
-      : `<span class="chips-empty">No places yet — tag one and its layer appears here.</span>`
+      : `<span class="chips-empty">No places on this map yet.${
+          import.meta.env.DEV ? ' Tag one and its layer appears here.' : ''}</span>`
     paintChips()
   }
   paintRail()
@@ -317,6 +321,9 @@ async function start() {
 
   /* ── search ───────────────────────────────────────────────────────────── */
 
+  /** Commands the dev-only tagger registers for itself. Empty in a build. */
+  const devActions: Record<string, () => void> = {}
+
   const hooks = {
     onLayer: (cat: string) => {
       active.has(cat) && active.size === 1 ? active.clear() : active.add(cat)
@@ -328,13 +335,11 @@ async function start() {
       if (id === 'clear-route') clearRoute()
       if (id === 'about') showAbout(campus)
       if (id === 'imagery') setImagery(!imagery)
-      if (id === 'tag-mode') setTagMode(!tagMode)
-      if (id === 'tags') showTagList()
-      if (id === 'tags-clear') clearAllTags()
       if (id === 'locate') {
         navigator.geolocation?.getCurrentPosition((pos) =>
           map.easeTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 17 }))
       }
+      devActions[id]?.()
     },
   }
 
@@ -368,33 +373,13 @@ async function start() {
     routeTo: (hit) => { if (hit.lat != null) routeTo(hit.lat, hit.lon!, hit.title) },
   })
 
-  /** Categories that had something in them last time the map was painted. */
-  let known = new Set(Object.keys(counts))
-
-  onTagsChange(() => {
-    refreshPoiList()
-    // Switch on a category the first time it gains a member, so a tag is never
-    // saved into an invisible layer — but leave the rest of the toggles alone,
-    // or every tag would undo whatever the user had chosen to look at.
-    for (const c of Object.keys(counts)) if (!known.has(c)) active.add(c)
-    for (const c of [...active]) if (!counts[c]) active.delete(c)
-    known = new Set(Object.keys(counts))
-
-    index = new SearchIndex(searchable(), hooks)
-    paintRail()
-    refreshPois()
-    paintTagBtn()
-  })
-
-  /* ── imagery & tagging ────────────────────────────────────────────────── */
+  /* ── imagery ──────────────────────────────────────────────────────────── */
 
   // Aerial imagery is the honest answer to "why is half the campus missing":
-  // it is not mapped yet. Tag mode is how you start fixing that.
+  // it is not mapped in OpenStreetMap yet.
   let imagery = false
-  let tagMode = false
 
   const imgBtn = document.getElementById('imagery-btn')!
-  const tagBtn = document.getElementById('tag-btn')!
   const credit = document.getElementById('imagery-credit')!
 
   function setImagery(on: boolean) {
@@ -409,34 +394,88 @@ async function start() {
   credit.hidden = true
   imgBtn.addEventListener('click', () => setImagery(!imagery))
 
-  function paintTagBtn() {
-    const n = tagCount()
-    tagBtn.querySelector('.n')!.textContent = n ? String(n) : ''
-    tagBtn.setAttribute('aria-pressed', String(tagMode))
-    tagBtn.title = tagMode
-      ? 'Tag mode on — tap the map to add a place'
-      : `Add missing places${n ? ` · ${n} tagged` : ''}`
-  }
+  /* ── surveying (development only) ─────────────────────────────────────── */
 
-  function setTagMode(on: boolean) {
-    tagMode = on
-    document.body.classList.toggle('tagging', on)
+  /**
+   * The tool the campus was surveyed with: tap the map, name what is there,
+   * export the lot into data/curated/places.json. That work is done and
+   * committed, so it has no business on the published site — this whole block
+   * and the module it pulls in are dropped from a production build.
+   *
+   * A dynamic import is what makes that true: a static one would keep the
+   * module in the bundle regardless, since it touches localStorage as it loads.
+   */
+  if (import.meta.env.DEV) {
+    const tagger = await import('./ui/tagger')
+    tagger.initTagger(campus)
+    taggedPois = tagger.tagPois
+
+    let tagMode = false
+
+    const tagBtn = document.createElement('button')
+    tagBtn.id = 'tag-btn'
+    tagBtn.type = 'button'
+    tagBtn.setAttribute('aria-pressed', 'false')
+    tagBtn.setAttribute('aria-label', 'Tag a missing place')
+    tagBtn.innerHTML = `
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+        <path d="M8 1.8 C5.5 1.8 3.6 3.7 3.6 6.1 C3.6 9.2 8 14.2 8 14.2 C8 14.2 12.4 9.2 12.4 6.1 C12.4 3.7 10.5 1.8 8 1.8 Z"
+              fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        <path d="M8 4.4 V7.8 M6.3 6.1 H9.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg><span class="n"></span>`
+    document.getElementById('bar')!.insertBefore(tagBtn, document.getElementById('layers-btn'))
+
+    const paintTagBtn = () => {
+      const n = tagger.tagCount()
+      tagBtn.querySelector('.n')!.textContent = n ? String(n) : ''
+      tagBtn.setAttribute('aria-pressed', String(tagMode))
+      tagBtn.title = tagMode
+        ? 'Tag mode on — tap the map to add a place'
+        : `Add missing places${n ? ` · ${n} tagged` : ''}`
+    }
+
+    const setTagMode = (on: boolean) => {
+      tagMode = on
+      document.body.classList.toggle('tagging', on)
+      paintTagBtn()
+      // Imagery makes tagging possible at all — you cannot mark a building you
+      // cannot see — so the first time in, turn it on.
+      if (on && !imagery) setImagery(true)
+    }
+    tagBtn.addEventListener('click', () => setTagMode(!tagMode))
     paintTagBtn()
-    // Imagery makes tagging possible at all — you cannot mark a building you
-    // cannot see — so the first time in, turn it on for them.
-    if (on && !imagery) setImagery(true)
-  }
-  tagBtn.addEventListener('click', () => setTagMode(!tagMode))
-  paintTagBtn()
 
-  map.on('click', (e) => {
-    if (!tagMode) return
-    // A building under the cursor gives the form a name to start from, and
-    // tells you the footprint is already mapped even if it is nameless.
-    const hit = map.queryRenderedFeatures(e.point, { layers: ['building'] })[0]
-    const near = (hit?.properties?.name as string) || undefined
-    showTagForm(e.lngLat.lat, e.lngLat.lng, near, () => setTagMode(false))
-  })
+    devActions['tag-mode'] = () => setTagMode(!tagMode)
+    devActions['tags'] = () => tagger.showTagList()
+    devActions['tags-clear'] = () => tagger.clearAllTags()
+
+    map.on('click', (e) => {
+      if (!tagMode) return
+      // A building under the cursor gives the form a name to start from, and
+      // tells you the footprint is already mapped even if it is nameless.
+      const hit = map.queryRenderedFeatures(e.point, { layers: ['building'] })[0]
+      const near = (hit?.properties?.name as string) || undefined
+      tagger.showTagForm(e.lngLat.lat, e.lngLat.lng, near, () => setTagMode(false))
+    })
+
+    // Categories that had something in them last time the map was painted.
+    let known = new Set(Object.keys(counts))
+
+    tagger.onTagsChange(() => {
+      refreshPoiList()
+      // Switch on a category the first time it gains a member, so a tag is
+      // never saved into an invisible layer — but leave the rest of the
+      // toggles alone, or every tag would undo what the user chose to look at.
+      for (const c of Object.keys(counts)) if (!known.has(c)) active.add(c)
+      for (const c of [...active]) if (!counts[c]) active.delete(c)
+      known = new Set(Object.keys(counts))
+
+      index = new SearchIndex(searchable(), hooks)
+      paintRail()
+      refreshPois()
+      paintTagBtn()
+    })
+  }
 
   /* ── chrome ───────────────────────────────────────────────────────────── */
 

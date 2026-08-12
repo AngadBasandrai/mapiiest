@@ -4,10 +4,10 @@ A map of IIEST Shibpur: the ground, the buildings, the paths and the lakes drawn
 from OpenStreetMap, aerial imagery on a toggle, walking and cycling routes — and
 **every place put on it by hand**.
 
-It ships with no places at all. That is the point: OSM's coverage of this campus
-is thin enough that auto-classifying its tags produces a sparse, half-wrong map,
-so instead you tag what is actually there, from the ground or from the imagery,
-and the map is exactly as good as the survey behind it.
+No place on it is derived from an OpenStreetMap tag. OSM's coverage of this
+campus is thin enough that auto-classifying it produces a sparse, half-wrong
+map, so the 134 places here were surveyed instead — walked, named and recorded
+against the aerial imagery — and the map is exactly as good as that survey.
 
 ```
 npm install
@@ -18,10 +18,8 @@ npm test           # typecheck + rebuild + smoke test
 
 ## What it does
 
-- **Tagging** — tap the map to put a place on it. Named, categorised, instantly
-  searchable and routable; export the set as curated data when you are done.
-- **Search** over every place you have added, ranked exact-key → prefix → fuzzy,
-  in well under a millisecond. `⌘K` or `/` anywhere; `↵` opens, `tab` routes.
+- **Search** over every place, ranked exact-key → prefix → fuzzy, in well under
+  a millisecond. `⌘K` or `/` anywhere; `↵` opens, `tab` routes there.
 - **Routing** by A\* over the OSM path network, with walking and cycling costs
   baked per edge at build time, so the ETA falls straight out of the search.
 - **Aerial imagery** under the map, on a toggle — see what is actually there.
@@ -46,27 +44,31 @@ is free to use with attribution and needs no key, so it ships working out of the
 box. If you specifically want Google, that means their JS SDK, your own API key,
 and dropping the no-key/offline property of this build.
 
-## Tagging what is missing
+## Surveying (development only)
 
-Turn on the pin button and tap anywhere. Name it, pick a category, save. Tagged
-places behave like any other from that moment — drawn on the map, searchable,
-routable, and their category gains a layer chip even if OSM had none of that
-kind.
-
-Removing one is the same gesture in reverse: open it on the map and hit
-**Delete tag** on its panel, or delete it from the list in `My tags`. When the
-last tag in a category goes, that category's chip goes with it. `Delete all my
-tags` in `⌘K` clears the lot, after a confirmation.
-
-Tags live in **this browser's localStorage and nowhere else**; there is no server
-and nothing is uploaded. `My tags` in search (`⌘K`) exports the set as JSON in
-exactly the `data/curated/places.json` shape, so committing them is a paste and
-a rebuild — at which point the build checks each one falls inside the campus
+The places on this map were put there by hand, with a tagging tool built into
+the app: turn on the pin button, tap the map, name what is there, pick a
+category. Tags are kept in the browser's own storage, listed and deleted from
+`My tags` in `⌘K`, and exported as JSON in exactly the
+`data/curated/places.json` shape — so committing a survey is a paste and a
+rebuild, at which point the build checks every row falls inside the campus
 boundary.
 
-Every tag form also links straight into the OSM editor at that spot. For
-anything real and permanent that is the better home: map it once there and it
-arrives here on the next fetch, and in every other map that reads OSM.
+**That tool is not part of the published site.** The survey is finished and
+committed, so nothing on the live map can add or remove a place: the tag button,
+the commands, the delete controls and the module behind them are all dropped
+from a production build, guarded by `import.meta.env.DEV` in `src/main.ts`. The
+guard is a dynamic `import()` rather than a flag around a static one, because a
+static import would keep the module in the bundle no matter what — it touches
+`localStorage` as it loads, so nothing can tree-shake it away.
+
+`npm run dev` still has the whole tool, for the next survey. `npm run build`
+has no trace of it, and the smoke and browser tests both assert that.
+
+To add or correct a place now, edit `data/curated/places.json` directly — or run
+the dev server, tag it, and paste the export in. Anything real and permanent is
+better off in OpenStreetMap itself; every tag form links straight into the OSM
+editor at that spot.
 
 ## How it is built
 
@@ -114,9 +116,9 @@ Order matters in `classify()`: **Abandoned** is tested first, so a derelict
 lecture hall does not send anyone looking for a lecture, and **Lakes** are
 tested before greenery, or a pond inside a park polygon reads as parkland.
 
-Categories with nothing in them show no layer chip, so on a fresh map the legend
-is empty and fills in as you tag. Pick from the full list in the tag form
-regardless — a category exists whether or not anything is in it yet.
+Categories with nothing in them show no layer chip, so the legend only ever
+lists what the map actually has. All 25 remain available to the surveying tool
+in a dev build, whether or not anything is in them yet.
 
 The map's centre, opening frame and pan limits are **derived from the boundary**
 at build time, not configured. Point `site.config.json` at another campus's OSM
@@ -162,10 +164,10 @@ and the two are complementary: tag now so you can use the map today, push the
 permanent things upstream as you go.
 
 Hand-added places live in `data/curated/places.json` — either real coordinates
-someone stood at, or an `anchor` naming an OSM feature to sit beside. It ships
-empty on purpose: a plausible guess on a map is worse than a gap. Tag mode
-writes exactly this format, so the loop is: imagery on → tag as you walk →
-export → paste → rebuild.
+someone stood at, or an `anchor` naming an OSM feature to sit beside. Nothing in
+there is a guess; a plausible invention on a map is worse than a gap. The
+surveying tool writes exactly this format, so the loop was: imagery on → tag as
+you walk → export → paste → rebuild.
 
 ## Not here
 
@@ -177,23 +179,23 @@ without one.
 
 `npm test` typechecks, rebuilds the data and runs `scripts/smoke.mjs`, which
 asserts that the basemap and routing graph are intact, that every place is
-findable by its own name, that the category vocabulary works for hand-tagged
-places in categories no OSM data has ever landed in, that routing holds up on
-both profiles with cycling never slower than walking, and that the MapLibre
-style validates in both themes. It also checks that every element id the
-TypeScript reaches for exists in `index.html` — that mismatch otherwise ships as
-a blank page.
+findable by its own name, that the category vocabulary works even for categories
+nothing has landed in yet, that routing holds up on both profiles with cycling
+never slower than walking, and that the MapLibre style validates in both themes.
+It also checks that every element id the TypeScript reaches for exists in
+`index.html` — that mismatch otherwise ships as a blank page.
 
-The suite adapts to the `places.fromOsm` switch: with it off it verifies nothing
-leaks in from an OSM tag, and routes between corners of the path network instead
-of between places, since there are none yet.
+Two things it deliberately checks the *absence* of: no place derived from an OSM
+tag while `places.fromOsm` is off, and no tagging command in a production build.
+It bundles the modules with `import.meta.env.DEV` defined as `false`, so what it
+tests is the shape the public gets.
 
 `npm run verify` drives the built site in headless Chrome at three viewports and
-fails on any console error, failed request, or map that never painted. It also
-runs the whole tagging loop for real — tag mode, tap, save, label, search, open,
-route, delete — since on an empty map that is the only way a place exists at
-all. It needs a server on `:5180` (`npx vite preview`) and a Chrome on `PATH` or
-`CHROME_PATH`.
+fails on any console error, failed request, or map that never painted. It picks a
+real place out of the current data, searches it, opens it, routes to it, toggles
+the imagery layer, and confirms there is no way to edit anything. It needs a
+server on `:5180` (`npx vite preview`) and a Chrome on `PATH` or `CHROME_PATH`;
+`--url` points it at any other origin, including the live site.
 
 ## Deploying
 

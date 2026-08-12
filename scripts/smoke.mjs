@@ -26,6 +26,9 @@ const ok = (cond, label, detail = '') => {
 await build({
   entryPoints: [join(ROOT, 'src/search/engine.ts')],
   bundle: true, format: 'esm', platform: 'node', outfile: TMP, logLevel: 'silent',
+  // Test the shape the public gets: `import.meta.env` does not exist outside
+  // Vite, and DEV-only code is not part of what ships.
+  define: { 'import.meta.env.DEV': 'false' },
 })
 const { SearchIndex } = await fresh(TMP)
 
@@ -120,6 +123,17 @@ ok(!index.search('mess menu today').some((h) => h.kind === 'place' && /menu/i.te
 
 ok(index.examples().length > 0, 'the empty state suggests something real',
    index.examples().join(', '))
+
+// Surveying was how this map was made, not something the published site offers.
+// Any of these reaching a production build means the switch leaked.
+const devCommands = index.docs.filter((d) => d.kind === 'action' && /^do:(tag|tags)/.test(d.id))
+ok(devCommands.length === 0, 'no tagging commands in a production build',
+   devCommands.map((d) => d.title).join(', '))
+for (const q of ['tag', 'tag mode', 'my tags', 'delete all my tags']) {
+  const hits = index.search(q).filter((h) => h.kind === 'action')
+  ok(!hits.some((h) => /tag/i.test(h.title)), `"${q}" surfaces no tagging command`,
+     hits.map((h) => h.title).join(', '))
+}
 ok(index.examples().every((e) => index.search(e).length > 0),
    'every suggestion actually returns something')
 
