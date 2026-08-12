@@ -1,6 +1,7 @@
 MIT License
 
-Copyright (c) 2026 the contributors of this repository
+Copyright (c) 2026 Angad Basandrai
+Copyright (c) 2026 ni5arga
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,11 +23,44 @@ SOFTWARE.
 
 ---
 
-This applies to the CODE only.
+## Where this came from
 
-Map data under data/ and public/data/ is derived from OpenStreetMap and is
-© OpenStreetMap contributors, licensed under the Open Database License (ODbL):
+This project began as a port of **ni5arga/iitk**, the same idea built for
+IIT Kanpur: https://github.com/ni5arga/iitk — MIT licensed, © 2026 ni5arga.
+
+Substantial portions of the source originate there and are used under the terms
+above, which is why that copyright notice is reproduced alongside ours. The
+parts carried over largely unchanged:
+
+  src/route/router.ts     A* over the path network, the CSR adjacency, the heap
+  src/search/hours.ts     the partial `opening_hours` reader
+  src/search/engine.ts    the fuzzy scoring and the document/index model
+  src/map/style.ts        the MapLibre style and both colour palettes
+  src/styles.css          the design tokens and most of the layout
+  scripts/build-data.mjs  the Overpass -> GeoJSON + routing-graph pipeline
+  scripts/smoke.mjs       the test harness shape
+
+What is new here: the aerial imagery layer, the surveying tool the places were
+collected with, boundary-derived map framing, the `places.fromOsm` switch, and
+the categories and classifier rules this campus needed.
+
+---
+
+## Everything that is not source code
+
+This licence covers the source code in this repository only.
+
+Map data in `data/raw/` and everything derived from it is © OpenStreetMap
+contributors, licensed under the Open Database License (ODbL):
 https://www.openstreetmap.org/copyright
 
-Font glyphs under public/font/ are rendered from Noto Sans, licensed under the
-SIL Open Font License 1.1: https://fonts.google.com/noto/specimen/Noto+Sans
+Surveyed places in `data/curated/places.json` were collected on foot for this
+project and are released under the same ODbL terms, so they can be folded back
+into OpenStreetMap without a licensing problem.
+
+Aerial imagery is served live from Esri World Imagery and is not redistributed
+by this repository. It remains © Esri, Maxar, Earthstar Geographics and their
+suppliers: https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9
+
+Label glyphs in `public/font/` are derived from Noto Sans, licensed under the
+SIL Open Font License 1.1: https://openfontlicense.org

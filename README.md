@@ -275,12 +275,18 @@ placeholder.
 
 ## Credit
 
-The idea, the shape of the app and much of its structure come from
-[ni5arga/iitk](https://github.com/ni5arga/iitk), the same thing built for
-IIT Kanpur.
+This started as a port of [ni5arga/iitk](https://github.com/ni5arga/iitk),
+© 2026 ni5arga, MIT licensed — the same idea built for IIT Kanpur. The router,
+the opening-hours reader, the search scoring, the map style, most of the
+stylesheet and the build pipeline all came from there, and its copyright notice
+is carried in `LICENSE` accordingly. `LICENSE` lists file by file what was
+inherited and what is new here.
 
 ## Licence
 
-Code is MIT (see `LICENSE`). Map data is © OpenStreetMap contributors under the
-[ODbL](https://www.openstreetmap.org/copyright). Font glyphs are Noto Sans under
-the SIL Open Font License.
+Code is MIT, © 2026 Angad Basandrai and © 2026 ni5arga — see `LICENSE`.
+
+Map data from OpenStreetMap, and the surveyed places in `data/curated/`, are
+under the [ODbL](https://www.openstreetmap.org/copyright). Aerial imagery is
+served live from Esri and is not redistributed here. Font glyphs are Noto Sans
+under the SIL Open Font License.
