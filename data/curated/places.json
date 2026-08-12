@@ -1,0 +1,1100 @@
+{
+  "_source": "survey",
+  "_note": "Exported from the map’s tag mode. Check each row against reality before committing it.",
+  "items": [
+    {
+      "id": "hostel-7-8xvj",
+      "name": "Hostel 7",
+      "cat": "hostel",
+      "lat": 22.556898,
+      "lon": 88.30206,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hostel-8-94ob",
+      "name": "Hostel 8",
+      "cat": "hostel",
+      "lat": 22.557198,
+      "lon": 88.302494,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hostel-9-9930",
+      "name": "Hostel 9",
+      "cat": "hostel",
+      "lat": 22.556955,
+      "lon": 88.302962,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hostel-10-9e0k",
+      "name": "Hostel-10",
+      "cat": "hostel",
+      "lat": 22.556643,
+      "lon": 88.302941,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hostel-11-9i7k",
+      "name": "Hostel 11",
+      "cat": "hostel",
+      "lat": 22.556554,
+      "lon": 88.301959,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "slater-hall-9xkv",
+      "name": "Slater Hall",
+      "cat": "activity",
+      "lat": 22.556373,
+      "lon": 88.302331,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hostel-13-pg-bdbq",
+      "name": "Hostel 13 (PG)",
+      "cat": "hostel",
+      "lat": 22.555291,
+      "lon": 88.302084,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "downing-hall-hostel-1-bvyf",
+      "name": "Downing Hall (Hostel - 1)",
+      "cat": "abandoned",
+      "lat": 22.555102,
+      "lon": 88.301383,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "pratichi-staff-quarters-c2ge",
+      "name": "Pratichi Staff Quarters",
+      "cat": "quarters",
+      "lat": 22.554904,
+      "lon": 88.302283,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "lt-williams-hall-of-residence-girls-c94p",
+      "name": "Lt Williams Hall Of Residence (Girls)",
+      "cat": "hostel",
+      "lat": 22.554711,
+      "lon": 88.302775,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "lt-williams-hall-of-residence-extension-ckns",
+      "name": "Lt. Williams Hall of Residence Extension",
+      "cat": "hostel",
+      "lat": 22.554962,
+      "lon": 88.303398,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "director-s-bungalow-culz",
+      "name": "Director's Bungalow",
+      "cat": "quarters",
+      "lat": 22.555197,
+      "lon": 88.303736,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "madhusadan-ddxk",
+      "name": "Madhusadan",
+      "cat": "abandoned",
+      "lat": 22.555155,
+      "lon": 88.30435,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "state-bank-of-india-ecgf",
+      "name": "State Bank of India",
+      "cat": "atm",
+      "lat": 22.555048,
+      "lon": 88.304644,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-food-technology-ev1l",
+      "name": "Department of Food Technology",
+      "cat": "academic",
+      "lat": 22.554847,
+      "lon": 88.304656,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "staff-quarters-fkrf",
+      "name": "Staff Quarters",
+      "cat": "quarters",
+      "lat": 22.55484,
+      "lon": 88.304919,
+      "desc": "Quarters for unskilled labor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "swimming-pool-ft5y",
+      "name": "Swimming Pool",
+      "cat": "sports",
+      "lat": 22.554085,
+      "lon": 88.302907,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "industrial-training-institute-gg15",
+      "name": "Industrial Training Institute",
+      "cat": "academic",
+      "lat": 22.554393,
+      "lon": 88.301709,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "b-e-model-school-playground-h2g7",
+      "name": "B.E. Model School Playground",
+      "cat": "green",
+      "lat": 22.554022,
+      "lon": 88.303886,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "b-e-model-school-horw",
+      "name": "B.E. Model School",
+      "cat": "academic",
+      "lat": 22.553852,
+      "lon": 88.305273,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "uco-bank-and-snt-building-hvyr",
+      "name": "UCO Bank and SnT building",
+      "cat": "atm",
+      "lat": 22.554054,
+      "lon": 88.305999,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-architecture-j5pz",
+      "name": "Department of Architecture",
+      "cat": "academic",
+      "lat": 22.553823,
+      "lon": 88.306584,
+      "desc": "Ground floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-physics-mcs8",
+      "name": "Department of Physics",
+      "cat": "academic",
+      "lat": 22.553437,
+      "lon": 88.306379,
+      "desc": "Fourth floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-mathermatics-mssm",
+      "name": "Department of Mathermatics",
+      "cat": "academic",
+      "lat": 22.553468,
+      "lon": 88.306371,
+      "desc": "Fifth and Sixth Floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-chemistry-na82",
+      "name": "Department of Chemistry",
+      "cat": "academic",
+      "lat": 22.553389,
+      "lon": 88.306392,
+      "desc": "Second and third floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "director-s-office-nvbx",
+      "name": "Director's Office",
+      "cat": "admin",
+      "lat": 22.554013,
+      "lon": 88.306245,
+      "desc": "Seventh Floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "office-of-technical-assistant-pbp0",
+      "name": "Office of Technical Assistant",
+      "cat": "admin",
+      "lat": 22.553979,
+      "lon": 88.306162,
+      "desc": "Fourth floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "website-team-offices-qm2r",
+      "name": "Website Team Offices",
+      "cat": "admin",
+      "lat": 22.553997,
+      "lon": 88.306242,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "dean-of-academic-office-rfec",
+      "name": "Dean of Academic Office",
+      "cat": "admin",
+      "lat": 22.553982,
+      "lon": 88.306237,
+      "desc": "Fifth floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "alumni-seminar-hall-t13k",
+      "name": "Alumni Seminar Hall",
+      "cat": "activity",
+      "lat": 22.554018,
+      "lon": 88.306343,
+      "desc": "Second floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "lecture-hall-complex-tlm4",
+      "name": "Lecture Hall Complex",
+      "cat": "lecture",
+      "lat": 22.554513,
+      "lon": 88.306136,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "basic-electrical-lab-tv6e",
+      "name": "Basic Electrical Lab",
+      "cat": "academic",
+      "lat": 22.554381,
+      "lon": 88.306702,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "workshop-complex-u0w3",
+      "name": "Workshop Complex",
+      "cat": "academic",
+      "lat": 22.554248,
+      "lon": 88.307459,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "cafe-inn-ujkv",
+      "name": "Cafe Inn",
+      "cat": "canteen",
+      "lat": 22.554043,
+      "lon": 88.307115,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "cpwd-office-v87m",
+      "name": "CPWD Office",
+      "cat": "landmark",
+      "lat": 22.553941,
+      "lon": 88.307465,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "biogas-plant-vg2a",
+      "name": "Biogas Plant",
+      "cat": "landmark",
+      "lat": 22.553882,
+      "lon": 88.307857,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "gooligan-ganja-lake-vol5",
+      "name": "Gooligan Ganja Lake",
+      "cat": "lake",
+      "lat": 22.553562,
+      "lon": 88.306841,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "boiler-w0uh",
+      "name": "Boiler",
+      "cat": "abandoned",
+      "lat": 22.554163,
+      "lon": 88.307943,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "wind-tunnel-and-aero-lab-ws7n",
+      "name": "Wind Tunnel and Aero Lab",
+      "cat": "academic",
+      "lat": 22.554087,
+      "lon": 88.30818,
+      "desc": "Wind Tunnel, 3D Printers",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-computer-science-and-techn-xmc2",
+      "name": "Department of Computer Science and Technology",
+      "cat": "academic",
+      "lat": 22.555156,
+      "lon": 88.306167,
+      "desc": "First and Second floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-metallurgy-and-earth-scien-xxf9",
+      "name": "Department of Metallurgy and Earth Sciences",
+      "cat": "academic",
+      "lat": 22.555274,
+      "lon": 88.306196,
+      "desc": "Ground floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-mining-yj1w",
+      "name": "Department of Mining",
+      "cat": "academic",
+      "lat": 22.555371,
+      "lon": 88.306464,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-metallurgy-and-earth-scien-yyb4",
+      "name": "Department of Metallurgy and Earth Sciences",
+      "cat": "academic",
+      "lat": 22.555319,
+      "lon": 88.306747,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-energy-z7rn",
+      "name": "Department of Energy",
+      "cat": "academic",
+      "lat": 22.554938,
+      "lon": 88.306114,
+      "desc": "Ground floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "nursery-zg62",
+      "name": "Nursery",
+      "cat": "green",
+      "lat": 22.55581,
+      "lon": 88.306424,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-electrical-engineering-zp7j",
+      "name": "Department of Electrical Engineering",
+      "cat": "academic",
+      "lat": 22.554838,
+      "lon": 88.306529,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-electronics-and-telecommun-005l",
+      "name": "Department of Electronics and Telecommunications",
+      "cat": "academic",
+      "lat": 22.555049,
+      "lon": 88.306877,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "institute-canteen-0azm",
+      "name": "Institute Canteen",
+      "cat": "canteen",
+      "lat": 22.555044,
+      "lon": 88.306626,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-mechanical-engineering-0xyl",
+      "name": "Department of Mechanical Engineering",
+      "cat": "academic",
+      "lat": 22.554866,
+      "lon": 88.307711,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "drawing-halls-1gqy",
+      "name": "Drawing Halls",
+      "cat": "lecture",
+      "lat": 22.55509,
+      "lon": 88.308107,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-information-technology-28ye",
+      "name": "Department of Information Technology",
+      "cat": "academic",
+      "lat": 22.555239,
+      "lon": 88.307353,
+      "desc": "Second and third floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "labs-of-department-of-electronics-and-te-2vn1",
+      "name": "Labs of Department of Electronics and Telecommunications",
+      "cat": "academic",
+      "lat": 22.555254,
+      "lon": 88.307288,
+      "desc": "Third floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "texmin-office-3m7h",
+      "name": "Texmin Office",
+      "cat": "admin",
+      "lat": 22.555281,
+      "lon": 88.307226,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "academic-offices-40ej",
+      "name": "Academic Offices",
+      "cat": "admin",
+      "lat": 22.555239,
+      "lon": 88.307221,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-aerospace-engineering-4eds",
+      "name": "Department of Aerospace Engineering",
+      "cat": "academic",
+      "lat": 22.555145,
+      "lon": 88.307749,
+      "desc": "First floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-civil-engineering-4qsm",
+      "name": "Department of Civil Engineering",
+      "cat": "academic",
+      "lat": 22.555135,
+      "lon": 88.307811,
+      "desc": "Second floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "som-lab-lab-of-department-of-aerospace-e-5jc8",
+      "name": "SOM Lab (Lab of Department of Aerospace Engineering)",
+      "cat": "academic",
+      "lat": 22.555065,
+      "lon": 88.308227,
+      "desc": "Ground floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "institute-hall-5qew",
+      "name": "Institute Hall",
+      "cat": "activity",
+      "lat": 22.55552,
+      "lon": 88.306493,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "student-canteen-6105",
+      "name": "Student Canteen",
+      "cat": "canteen",
+      "lat": 22.555593,
+      "lon": 88.306418,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "student-store-66jj",
+      "name": "Student Store",
+      "cat": "shop",
+      "lat": 22.555575,
+      "lon": 88.306521,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "parade-ground-6hk5",
+      "name": "Parade Ground",
+      "cat": "green",
+      "lat": 22.555709,
+      "lon": 88.307066,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "bidisha-lake-6tg3",
+      "name": "Bidisha Lake",
+      "cat": "lake",
+      "lat": 22.555397,
+      "lon": 88.305545,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "iiest-meditation-center-and-clock-tower-7tlp",
+      "name": "IIEST Meditation Center and Clock Tower",
+      "cat": "landmark",
+      "lat": 22.556244,
+      "lon": 88.305552,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "bishop-s-college-cemetry-86s8",
+      "name": "Bishop's College Cemetry",
+      "cat": "landmark",
+      "lat": 22.556424,
+      "lon": 88.305867,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "university-guest-house-8lsh",
+      "name": "University Guest House",
+      "cat": "landmark",
+      "lat": 22.556305,
+      "lon": 88.3065,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "volleyball-courts-90sd",
+      "name": "Volleyball Courts",
+      "cat": "sports",
+      "lat": 22.555546,
+      "lon": 88.307788,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "netaji-bhavan-9cje",
+      "name": "Netaji Bhavan",
+      "cat": "landmark",
+      "lat": 22.555941,
+      "lon": 88.307771,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "badminton-courts-9mdp",
+      "name": "Badminton Courts",
+      "cat": "sports",
+      "lat": 22.556014,
+      "lon": 88.307782,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "cheap-store-9vj3",
+      "name": "Cheap Store",
+      "cat": "shop",
+      "lat": 22.556074,
+      "lon": 88.307795,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "university-canteen-a3v3",
+      "name": "University Canteen",
+      "cat": "canteen",
+      "lat": 22.556322,
+      "lon": 88.307639,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "laundry-service-agja",
+      "name": "Laundry Service",
+      "cat": "laundry",
+      "lat": 22.556437,
+      "lon": 88.307625,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "student-amenitites-centre-aqua",
+      "name": "Student Amenitites Centre",
+      "cat": "activity",
+      "lat": 22.556562,
+      "lon": 88.307723,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "rabindranath-tagore-statue-rt-b5rk",
+      "name": "Rabindranath Tagore Statue (RT)",
+      "cat": "landmark",
+      "lat": 22.556674,
+      "lon": 88.30724,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "odyssey-c16k",
+      "name": "Odyssey",
+      "cat": "landmark",
+      "lat": 22.55663,
+      "lon": 88.307511,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "1st-gate-lake-cc9n",
+      "name": "1st Gate Lake",
+      "cat": "lake",
+      "lat": 22.557031,
+      "lon": 88.30728,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "open-air-theatre-badal-sarkar-oat-ground-cz01",
+      "name": "Open Air Theatre (Badal Sarkar OAT/Ground)",
+      "cat": "green",
+      "lat": 22.556333,
+      "lon": 88.307122,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "lord-s-ground-dabn",
+      "name": "Lord's Ground",
+      "cat": "sports",
+      "lat": 22.555994,
+      "lon": 88.308364,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "amul-store-difh",
+      "name": "Amul Store",
+      "cat": "shop",
+      "lat": 22.556608,
+      "lon": 88.307907,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "parking-e80y",
+      "name": "Parking",
+      "cat": "cycle",
+      "lat": 22.555448,
+      "lon": 88.307529,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "ramanujan-central-library-ew3k",
+      "name": "Ramanujan Central Library",
+      "cat": "library",
+      "lat": 22.554938,
+      "lon": 88.30879,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "computer-centres-f8oy",
+      "name": "Computer Centres",
+      "cat": "academic",
+      "lat": 22.554902,
+      "lon": 88.308962,
+      "desc": "Third floor",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "fluid-mechanics-lab-department-of-aerosp-fq4k",
+      "name": "Fluid Mechanics Lab (Department of Aerospace Engineering)",
+      "cat": "academic",
+      "lat": 22.554571,
+      "lon": 88.308716,
+      "desc": "Wind Tunnel",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "metallurgy-labs-department-of-metallurgy-g4yd",
+      "name": "Metallurgy Labs (Department of Metallurgy and Earth Sciences)",
+      "cat": "academic",
+      "lat": 22.554647,
+      "lon": 88.308294,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hostel-extension-i-h15-h16-hnxa",
+      "name": "Hostel Extension I (H15-H16)",
+      "cat": "hostel",
+      "lat": 22.554837,
+      "lon": 88.309699,
+      "desc": "PG/PHD",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hostel-extension-ii-h15-h16-hzjq",
+      "name": "Hostel Extension II (H15-H16)",
+      "cat": "hostel",
+      "lat": 22.554549,
+      "lon": 88.309484,
+      "desc": "PG/PHD",
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "1000-seater-hostel-idt7",
+      "name": "1000 Seater Hostel",
+      "cat": "hostel",
+      "lat": 22.554486,
+      "lon": 88.310019,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "1000-seater-hostel-mess-itov",
+      "name": "1000 Seater Hostel Mess",
+      "cat": "mess",
+      "lat": 22.554982,
+      "lon": 88.310299,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hostel-14-j0wx",
+      "name": "Hostel 14",
+      "cat": "hostel",
+      "lat": 22.555708,
+      "lon": 88.309235,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hostel-15-j56y",
+      "name": "Hostel 15",
+      "cat": "hostel",
+      "lat": 22.555597,
+      "lon": 88.309774,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hostel-16-je2d",
+      "name": "Hostel 16",
+      "cat": "hostel",
+      "lat": 22.555526,
+      "lon": 88.310365,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "sengupta-hall-jhrf",
+      "name": "Sengupta Hall",
+      "cat": "hostel",
+      "lat": 22.555992,
+      "lon": 88.310322,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "sen-hall-jmcs",
+      "name": "Sen Hall",
+      "cat": "hostel",
+      "lat": 22.556141,
+      "lon": 88.309488,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hall-staff-quarters-i-kbl0",
+      "name": "Hall Staff Quarters I",
+      "cat": "quarters",
+      "lat": 22.556778,
+      "lon": 88.309725,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hall-staff-quarters-ii-kg9v",
+      "name": "Hall Staff Quarters II",
+      "cat": "quarters",
+      "lat": 22.556603,
+      "lon": 88.310062,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hall-staff-quarters-iii-kmy7",
+      "name": "Hall Staff Quarters III",
+      "cat": "quarters",
+      "lat": 22.556359,
+      "lon": 88.310648,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "mcdonald-hostel-ktw6",
+      "name": "McDonald Hostel",
+      "cat": "hostel",
+      "lat": 22.556762,
+      "lon": 88.309145,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "richardson-hall-kxlb",
+      "name": "Richardson Hall",
+      "cat": "hostel",
+      "lat": 22.556922,
+      "lon": 88.308281,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hostel-for-special-needs-candidates-llhb",
+      "name": "Hostel for Special Needs Candidates",
+      "cat": "hostel",
+      "lat": 22.555171,
+      "lon": 88.309527,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "staff-quarters-lxnm",
+      "name": "Staff Quarters",
+      "cat": "quarters",
+      "lat": 22.555247,
+      "lon": 88.309158,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "d-type-lane-quarters-i-mltg",
+      "name": "D-Type Lane Quarters I",
+      "cat": "quarters",
+      "lat": 22.553659,
+      "lon": 88.309413,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "d-type-lane-quarters-ii-n1ha",
+      "name": "D-Type Lane Quarters II",
+      "cat": "quarters",
+      "lat": 22.55359,
+      "lon": 88.309806,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "d-type-lane-quarters-iii-n6vg",
+      "name": "D-Type Lane Quarters III",
+      "cat": "quarters",
+      "lat": 22.553989,
+      "lon": 88.309481,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "d-type-lane-quarters-iv-ncfr",
+      "name": "D-Type Lane Quarters IV",
+      "cat": "quarters",
+      "lat": 22.553927,
+      "lon": 88.309871,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "park-o9rs",
+      "name": "Park",
+      "cat": "green",
+      "lat": 22.553909,
+      "lon": 88.308835,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "department-of-vlsi-pibv",
+      "name": "Department of VLSI",
+      "cat": "academic",
+      "lat": 22.553954,
+      "lon": 88.306229,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hidden-lighthouse-pxjf",
+      "name": "Hidden Lighthouse",
+      "cat": "landmark",
+      "lat": 22.554497,
+      "lon": 88.306998,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "pandya-hall-girls-qnge",
+      "name": "Pandya Hall (Girls)",
+      "cat": "hostel",
+      "lat": 22.55695,
+      "lon": 88.306152,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "basketball-court-rk5s",
+      "name": "Basketball Court",
+      "cat": "sports",
+      "lat": 22.556713,
+      "lon": 88.305216,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "iiest-hospital-ski6",
+      "name": "IIEST Hospital",
+      "cat": "health",
+      "lat": 22.557121,
+      "lon": 88.305374,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "punjab-national-bank-swyv",
+      "name": "Punjab National Bank",
+      "cat": "atm",
+      "lat": 22.55704,
+      "lon": 88.305601,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "frank-ross-medical-store-tchj",
+      "name": "Frank Ross Medical Store",
+      "cat": "shop",
+      "lat": 22.557131,
+      "lon": 88.305245,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "institute-mental-health-counselor-udmc",
+      "name": "Institute Mental Health Counselor",
+      "cat": "health",
+      "lat": 22.557133,
+      "lon": 88.305213,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "worship-place-islam-vc2w",
+      "name": "Worship Place (Islam)",
+      "cat": "worship",
+      "lat": 22.554365,
+      "lon": 88.310426,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "worship-place-hinduism-w4oz",
+      "name": "Worship Place (Hinduism)",
+      "cat": "worship",
+      "lat": 22.557423,
+      "lon": 88.304908,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "wolfenden-hall-girls-wjql",
+      "name": "Wolfenden Hall (Girls)",
+      "cat": "hostel",
+      "lat": 22.557078,
+      "lon": 88.304659,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "sister-nivedita-ladies-hostel-girls-wy3c",
+      "name": "Sister Nivedita Ladies' Hostel (Girls)",
+      "cat": "hostel",
+      "lat": 22.55675,
+      "lon": 88.304016,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hall-staff-quarters-1-y29q",
+      "name": "Hall Staff Quarters 1",
+      "cat": "quarters",
+      "lat": 22.557601,
+      "lon": 88.304916,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hall-staff-quarters-2-y7ib",
+      "name": "Hall Staff Quarters 2",
+      "cat": "quarters",
+      "lat": 22.557629,
+      "lon": 88.304486,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "hall-staff-quarters-3-yddz",
+      "name": "Hall Staff Quarters 3",
+      "cat": "quarters",
+      "lat": 22.557654,
+      "lon": 88.30414,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "gymnasium-z1c1",
+      "name": "Gymnasium",
+      "cat": "sports",
+      "lat": 22.555544,
+      "lon": 88.303343,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "professor-quarters-i-zduc",
+      "name": "Professor Quarters I",
+      "cat": "quarters",
+      "lat": 22.556447,
+      "lon": 88.303587,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "professor-quarters-ii-zirs",
+      "name": "Professor Quarters II",
+      "cat": "quarters",
+      "lat": 22.556058,
+      "lon": 88.303442,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "professor-quarters-iii-znwg",
+      "name": "Professor Quarters III",
+      "cat": "quarters",
+      "lat": 22.556086,
+      "lon": 88.302985,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "neem-lake-zvbw",
+      "name": "Neem Lake",
+      "cat": "lake",
+      "lat": 22.555826,
+      "lon": 88.302203,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "staff-quarters-i-0phh",
+      "name": "Staff Quarters I",
+      "cat": "quarters",
+      "lat": 22.55589,
+      "lon": 88.301191,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "staff-quarters-ii-0u37",
+      "name": "Staff Quarters II",
+      "cat": "quarters",
+      "lat": 22.556231,
+      "lon": 88.3013,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "staff-quarter-b179-20aq",
+      "name": "Staff Quarter (B179)",
+      "cat": "quarters",
+      "lat": 22.557372,
+      "lon": 88.303559,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "staff-quarter-b180-27nj",
+      "name": "Staff Quarter (B180)",
+      "cat": "quarters",
+      "lat": 22.557335,
+      "lon": 88.303921,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "2nd-gate-iiest-2mcb",
+      "name": "2nd Gate IIEST",
+      "cat": "landmark",
+      "lat": 22.557773,
+      "lon": 88.30345,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "iiest-first-gate-3bv0",
+      "name": "IIEST First Gate",
+      "cat": "landmark",
+      "lat": 22.557492,
+      "lon": 88.306912,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "iiest-3rd-gate-48ve",
+      "name": "IIEST 3rd Gate",
+      "cat": "landmark",
+      "lat": 22.554864,
+      "lon": 88.300657,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "swami-vivekananda-statue-6ja6",
+      "name": "Swami Vivekananda Statue",
+      "cat": "landmark",
+      "lat": 22.555954,
+      "lon": 88.306472,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "oval-ground-9smd",
+      "name": "Oval Ground",
+      "cat": "sports",
+      "lat": 22.555861,
+      "lon": 88.304391,
+      "surveyed": "2026-08-12"
+    },
+    {
+      "id": "nature-study-park-neem-lake-ahdy",
+      "name": "Nature Study Park (Neem Lake)",
+      "cat": "landmark",
+      "lat": 22.555749,
+      "lon": 88.303031,
+      "surveyed": "2026-08-12"
+    }
+  ]
+}

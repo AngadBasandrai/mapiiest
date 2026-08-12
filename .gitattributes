@@ -1,0 +1,8 @@
+# Keep the repository in LF regardless of who checks it out — CI runs on Linux
+# and the shell scripts inside the workflows break on CRLF.
+* text=auto eol=lf
+
+# Glyph atlases are binary; line-ending translation would corrupt them.
+*.pbf binary
+*.png binary
+*.jpg binary

@@ -1,0 +1,99 @@
+name: pages
+
+# Builds the site and publishes it to GitHub Pages on every push to main.
+#
+# One-time setup in the repository: Settings -> Pages -> Build and deployment
+# -> Source: "GitHub Actions". Nothing else to configure — the base path is
+# worked out below from the repository name.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; queue instead of cancelling, so the last push to
+# land is the one that ends up live.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Publishing a broken style is publishing a page that never loads, so the
+      # smoke test gates the deploy rather than just the pull request.
+      - name: Smoke test
+        run: npm run build:data && npm run smoke
+
+      - name: Work out the base path
+        id: base
+        run: |
+          repo='${{ github.event.repository.name }}'
+          owner='${{ github.repository_owner }}'
+          # A custom domain serves the site from that domain's root, so the
+          # moment public/CNAME exists the repo name must drop out of the URLs.
+          # Same for a repository named <owner>.github.io. Everything else is
+          # served from /<repo>/.
+          if [ -f public/CNAME ]; then
+            echo 'path=/' >> "$GITHUB_OUTPUT"
+            echo "custom domain: $(cat public/CNAME)"
+          elif [ "$(echo "$repo" | tr '[:upper:]' '[:lower:]')" = "$(echo "$owner" | tr '[:upper:]' '[:lower:]').github.io" ]; then
+            echo 'path=/' >> "$GITHUB_OUTPUT"
+          else
+            echo "path=/$repo/" >> "$GITHUB_OUTPUT"
+          fi
+          echo "base path: $(tail -1 "$GITHUB_OUTPUT")"
+
+      - name: Build
+        run: npm run build
+        env:
+          BASE_PATH: ${{ steps.base.outputs.path }}
+
+      # A build that quietly produced no places would deploy an empty map.
+      - name: Check the payload has data in it
+        run: |
+          node -e '
+            const c = require("./dist/data/campus.json");
+            const fail = (m) => { console.error("FAIL: " + m); process.exit(1) };
+            if (!c.meta.bbox) fail("no campus bbox — the map would open unframed");
+            if (!c.pois.length) console.warn("note: deploying a map with no places on it");
+            console.log(`ok: ${c.pois.length} places`);
+          '
+
+      # `enablement` turns Pages on for the repository if it is not already,
+      # so there is no manual Settings step before the first deploy.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

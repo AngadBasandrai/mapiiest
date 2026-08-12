@@ -1,0 +1,61 @@
+name: refresh-data
+
+# OpenStreetMap changes under us. Once a week, refetch the campus extract and
+# open a PR if anything moved — so improvements mapped by anyone show up here
+# without a human remembering to run the script.
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Refetch from Overpass
+        run: npm run fetch -- --force
+
+      # A refetch that quietly returns an empty extract would otherwise land as
+      # a PR that deletes the whole map.
+      - name: Rebuild and test
+        run: npm run build:data && npm run smoke
+
+      - name: Summarise the change
+        id: diff
+        run: |
+          if git diff --quiet -- data/raw; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo 'body<<EOF'
+              echo 'Weekly Overpass refetch. Counts after rebuild:'
+              echo '```'
+              node scripts/build-data.mjs
+              echo '```'
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: peter-evans/create-pull-request@v7
+        if: steps.diff.outputs.changed == 'true'
+        with:
+          branch: data/weekly-refresh
+          title: 'data: weekly OpenStreetMap refresh'
+          body: ${{ steps.diff.outputs.body }}
+          commit-message: 'data: refresh OpenStreetMap extract'
+          add-paths: data/raw

@@ -1,0 +1,21 @@
+{
+  "_readme": "One place for everything campus-specific. The Node scripts and the app both read this, so pointing the project at another campus means editing this file and re-running `npm run fetch -- --force && npm run build:data`. Note that the map's centre, zoom and pan limits are NOT here: they are derived from the campus boundary at build time and land in campus.json.",
+
+  "name": "IIEST Shibpur",
+  "longName": "Indian Institute of Engineering Science and Technology, Shibpur",
+  "brand": { "head": "iiest", "tail": " shibpur" },
+  "tagline": "campus map & search",
+
+  "repo": "https://github.com/AngadBasandrai/mapiiest",
+
+  "places": {
+    "_note": "fromOsm=false ships a map with no places on it at all — just the ground, the buildings and the paths — so every place can be put on by hand via tag mode or data/curated/places.json. Set it to true to have the build classify OSM features into places again; nothing else needs to change.",
+    "fromOsm": false
+  },
+
+  "osm": {
+    "campusWay": 52097578,
+    "wikidata": "Q3348743",
+    "bbox": "22.5500,88.2975,22.5610,88.3145"
+  }
+}

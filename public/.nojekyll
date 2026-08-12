@@ -1,0 +1,3 @@
+Stops GitHub Pages running the output through Jekyll, which would otherwise
+skip files and folders whose names start with an underscore — public/_headers
+here, and Vite's asset naming in future.
