@@ -272,6 +272,14 @@ export function applyImagery(map: maplibregl.Map, on: boolean) {
   if (!map.getLayer('imagery')) return
   map.setLayoutProperty('imagery', 'visibility', on ? 'visible' : 'none')
 
+  // The category tint on building footprints is drawn from OSM building names,
+  // which are not the surveyed list this map runs on — over a photograph it is
+  // just coloured blotches on the wrong roofs. Keep it for the drawn map, where
+  // it still helps a footprint read as "this is a hostel", and drop it here.
+  if (map.getLayer('building-cat')) {
+    map.setLayoutProperty('building-cat', 'visibility', on ? 'none' : 'visible')
+  }
+
   // Over a photograph the drawn ground is a hindrance: what you want is the
   // real roofs, with our outlines on top showing what OSM already knows about.
   const opacity: [string, number, number][] = [

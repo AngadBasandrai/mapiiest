@@ -87,10 +87,11 @@ async function start() {
   // Handle for scripts/verify-browser.mjs and for poking at the map in devtools.
   ;(window as unknown as { __map: maplibregl.Map }).__map = map
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
-  map.addControl(new maplibregl.GeolocateControl({
+  const geolocate = new maplibregl.GeolocateControl({
     positionOptions: { enableHighAccuracy: true },
     trackUserLocation: true,
-  }), 'bottom-right')
+  })
+  map.addControl(geolocate, 'bottom-right')
 
   /* ── layer state ──────────────────────────────────────────────────────── */
 
@@ -288,6 +289,15 @@ async function start() {
       () => {},
       { timeout: 6000, maximumAge: 120_000 },
     )
+
+    // Switch the locate control on for anyone who has already granted the
+    // permission, so the blue dot is there without being asked for. Only when
+    // it is already granted: `prompt` would throw a permission dialog at every
+    // first-time visitor before they have seen the map, and `denied` would put
+    // the control into its error state for no reason.
+    navigator.permissions?.query({ name: 'geolocation' })
+      .then((status) => { if (status.state === 'granted') geolocate.trigger() })
+      .catch(() => {}) // Safari and friends: no permissions API, so leave it off
   })
 
   /* ── selection ────────────────────────────────────────────────────────── */

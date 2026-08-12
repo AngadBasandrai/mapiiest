@@ -182,19 +182,28 @@ async function check(name, width, height, theme) {
     ok(true, 'sheet closes')
   }
 
-  ok(await page.$('#foot a') !== null, 'source link present in footer')
+  // ODbL requires the credit even though the footer link is gone.
+  const attrib = await page.evaluate(() => {
+    const a = document.querySelector('#attrib a')
+    if (!a) return null
+    const r = a.getBoundingClientRect()
+    return { href: a.getAttribute('href'), visible: r.width > 0 && r.height > 0 }
+  })
+  ok(attrib?.visible && /openstreetmap\.org/.test(attrib.href ?? ''),
+     'OpenStreetMap attribution is present and visible', attrib?.href ?? 'missing')
 
-  // In dock mode the chips and the footer share one stack and must not
-  // collide. In sheet mode the legend is an overlay that covers them on
-  // purpose, so the check does not apply.
+  // In dock mode the chips sit loose at the bottom-left and must stay clear of
+  // the attribution in the opposite corner. In sheet mode the legend is an
+  // overlay that covers everything on purpose, so the check does not apply.
   if (!sheetMode) {
-    const overlap = await page.evaluate(() => {
+    const clash = await page.evaluate(() => {
       const l = document.getElementById('layers')?.getBoundingClientRect()
-      const f = document.getElementById('foot')?.getBoundingClientRect()
-      if (!l || !f) return 'missing'
-      return l.bottom > f.top + 1 ? `layers.bottom=${l.bottom.toFixed(0)} > foot.top=${f.top.toFixed(0)}` : ''
+      const a = document.getElementById('attrib')?.getBoundingClientRect()
+      if (!l || !a) return 'missing'
+      const overlaps = l.right > a.left && l.left < a.right && l.bottom > a.top && l.top < a.bottom
+      return overlaps ? `chips ${l.right.toFixed(0)}px vs attribution ${a.left.toFixed(0)}px` : ''
     })
-    ok(overlap === '', 'layer chips do not overlap the footer', overlap)
+    ok(clash === '', 'layer chips clear the attribution', clash)
   }
 
   // Open the palette and run a query the way a user would.
@@ -282,6 +291,19 @@ async function check(name, width, height, theme) {
       const eta = await page.evaluate(() =>
         document.querySelector('#route-badge .eta')?.textContent ?? '')
       ok(routed && eta !== '', 'routing draws a path with an ETA', eta)
+
+      // The badge is centred on the same edge the legend is anchored to, and
+      // it draws on top — a wide legend disappears under it without this.
+      if (!sheetMode) {
+        const hidden = await page.evaluate(() => {
+          const b = document.getElementById('route-badge').getBoundingClientRect()
+          return [...document.querySelectorAll('#layer-chips .chip')].filter((c) => {
+            const r = c.getBoundingClientRect()
+            return r.right > b.left && r.left < b.right && r.bottom > b.top && r.top < b.bottom
+          }).map((c) => c.dataset.cat)
+        })
+        ok(hidden.length === 0, 'the route badge covers no layer chip', hidden.join(', '))
+      }
     }
 
     // Nothing on a published map may edit it. Surveying was a build-time tool.
@@ -297,6 +319,16 @@ async function check(name, width, height, theme) {
     await page.keyboard.press('Escape')
   }
 
+  // Without the permission already granted, the locate control must stay put:
+  // auto-triggering here would throw a permission dialog at a first-time
+  // visitor before they have even seen the map.
+  const locateIdle = await page.evaluate(() => {
+    const b = document.querySelector('.maplibregl-ctrl-geolocate')
+    return b ? !b.className.includes('geolocate-active') &&
+               !b.className.includes('geolocate-waiting') : 'missing'
+  })
+  ok(locateIdle === true, 'locate stays off when the permission is not granted', String(locateIdle))
+
   /* ── imagery ───────────────────────────────────────────────────────── */
 
   await page.keyboard.press('Escape')
@@ -308,10 +340,12 @@ async function check(name, width, height, theme) {
     // underneath it and the toggle looks broken.
     campusFill: window.__map?.getPaintProperty('campus', 'fill-opacity'),
     credit: !document.getElementById('imagery-credit').hidden,
+    tint: window.__map?.getLayoutProperty('building-cat', 'visibility'),
   }))
   ok(img.pressed === 'true' && img.visible === 'visible', 'imagery layer switches on', img.visible)
   ok(img.campusFill === 0, 'ground fills step aside for the photo', `campus fill-opacity ${img.campusFill}`)
   ok(img.credit, 'imagery attribution appears with it')
+  ok(img.tint === 'none', 'the building category tint is hidden over the photo', `visibility ${img.tint}`)
 
   if (SHOTS) {
     // Tiles are a network round trip; screenshotting before they land produces
@@ -329,8 +363,10 @@ async function check(name, width, height, theme) {
     visible: window.__map?.getLayoutProperty('imagery', 'visibility'),
     campusFill: window.__map?.getPaintProperty('campus', 'fill-opacity'),
     credit: document.getElementById('imagery-credit').hidden,
+    tint: window.__map?.getLayoutProperty('building-cat', 'visibility'),
   }))
   ok(off.visible === 'none' && off.campusFill === 1 && off.credit, 'and back off cleanly')
+  ok(off.tint === 'visible', 'and the building tint comes back with the drawn map', `visibility ${off.tint}`)
 
   if (SHOTS) {
     await page.keyboard.press('Escape')
@@ -342,9 +378,50 @@ async function check(name, width, height, theme) {
   await page.close()
 }
 
+/**
+ * The other side of that: with the permission already granted, the locate
+ * control should come up switched on rather than waiting to be found. Runs in
+ * its own page, and last, because granting the permission moves the map — which
+ * would quietly undermine every check above it.
+ */
+async function checkLocateOnByDefault() {
+  console.log('\nlocation (permission already granted)')
+  const ctx = browser.defaultBrowserContext()
+  await ctx.overridePermissions(new URL(URL_).origin, ['geolocation'])
+
+  const page = await ctx.newPage()
+  await page.setViewport({ width: 1440, height: 900 })
+  // Stand in the middle of campus, so the fix is somewhere the map can show.
+  await page.setGeolocation({
+    latitude: campus.meta.center[1],
+    longitude: campus.meta.center[0],
+  })
+  await page.goto(URL_, { waitUntil: 'networkidle2', timeout: 30_000 })
+  await page.waitForFunction(
+    () => document.getElementById('boot')?.classList.contains('gone'),
+    { timeout: 20_000 },
+  ).catch(() => {})
+
+  const active = await page.waitForFunction(() => {
+    const b = document.querySelector('.maplibregl-ctrl-geolocate')
+    return !!b && /geolocate-(active|background)/.test(b.className)
+  }, { timeout: 15_000 }).then(() => true).catch(() => false)
+  const cls = await page.evaluate(() =>
+    document.querySelector('.maplibregl-ctrl-geolocate')?.className ?? 'missing')
+  ok(active, 'locate switches itself on when already permitted', cls)
+
+  const dot = await page.waitForSelector('.maplibregl-user-location-dot', { timeout: 8000 })
+    .then(() => true).catch(() => false)
+  ok(dot, 'and the position marker is on the map')
+
+  await ctx.clearPermissionOverrides()
+  await page.close()
+}
+
 await check('desktop-dark', 1440, 900, 'dark')
 await check('desktop-light', 1440, 900, 'light')
 await check('mobile-dark', 402, 874, 'dark')
+await checkLocateOnByDefault()
 
 await browser.close()
 await rm(PROFILE, { recursive: true, force: true })

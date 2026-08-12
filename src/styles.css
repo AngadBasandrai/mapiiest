@@ -229,7 +229,7 @@ body.imagery .chip, body.imagery .chips-empty { padding: 3px 7px; }
 body.imagery #attrib { padding: 1px 5px; }
 body.imagery .chip .dot { box-shadow: none; }
 
-/* ── bottom-left: source link, then layers above it ──────────────────── */
+/* ── bottom-left: the layer legend ───────────────────────────────────── */
 
 #dock {
   position: fixed;
@@ -243,28 +243,11 @@ body.imagery .chip .dot { box-shadow: none; }
   max-width: min(560px, calc(100vw - 24px));
 }
 
-#foot {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-#foot > a {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 11px;
-  background: var(--bg-1);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: -.005em;
-  color: var(--fg-2);
-  text-decoration: none;
-}
-#foot > a:hover { border-color: var(--line-2); color: var(--fg); }
-#foot svg { flex: none; }
+/* The dock is bottom-anchored and the route badge is centred on the same edge,
+   so a legend wide enough to reach the middle would sit under it. Lift the
+   chips clear for as long as a badge is on screen: it stands 37px tall on its
+   own --pad offset, which needs 44 to clear with a gap left over. */
+body:has(#route-badge:not([hidden])) #dock { padding-bottom: 44px; }
 
 /* Legally required, practically ignored — keep it out of the way. */
 #attrib {
@@ -652,24 +635,11 @@ button.linkish:hover { color: var(--danger); }
   #open-search kbd { display: none; }
   #brand-btn { margin-right: auto; }
 
-  /* The dock unstacks: layers become a sheet, source link sits above the
-     thumb search bar. */
+  /* The dock unstacks: the layers become a sheet of their own. */
   #dock {
     position: static;
     display: contents;
   }
-
-  #foot {
-    position: fixed;
-    left: 0; right: 0;
-    bottom: calc(var(--pad) + 58px + env(safe-area-inset-bottom));
-    z-index: 5;
-    display: flex;
-    justify-content: center;
-    gap: 6px;
-  }
-  #foot > a { padding: 6px 10px; font-size: 12px; }
-  body:has(#panel:not([hidden])) #foot { display: none; }
 
   /* A wall of category labels loose over the map is clutter whichever way it
      wraps, so on a phone the legend gets a container and a toggle instead. */
@@ -820,9 +790,7 @@ button.linkish:hover { color: var(--danger); }
   }
   #route-badge .via { max-width: 34vw; }
 
-  /* Only one thing can sit in that slot: the route badge wins over the source
-     link, and the detail sheet covers both. */
-  body:has(#route-badge:not([hidden])) #foot { display: none; }
+  /* The detail sheet covers the route badge rather than fighting it. */
   body:has(#panel:not([hidden])) #route-badge { display: none; }
 
   /* Palette fills the screen — a centred box is wrong on a phone. */
