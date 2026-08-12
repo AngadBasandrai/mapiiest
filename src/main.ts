@@ -78,7 +78,8 @@ async function start() {
     minZoom: 13,
     maxZoom: 19.5,
     maxBounds: panBounds(campus),
-    // Attribution lives in the page footer instead — same ODbL credit, one place.
+    // Attribution is rendered by the page itself (#attrib) instead — same ODbL
+    // credit, one place, and it can carry the imagery credit alongside it.
     attributionControl: false,
     dragRotate: false,
     pitchWithRotate: false,
