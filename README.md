@@ -195,6 +195,60 @@ route, delete — since on an empty map that is the only way a place exists at
 all. It needs a server on `:5180` (`npx vite preview`) and a Chrome on `PATH` or
 `CHROME_PATH`.
 
+## Deploying
+
+Pushing to `main` builds and publishes to GitHub Pages via
+`.github/workflows/pages.yml`. Live at
+**https://angadbasandrai.github.io/mapiiest/**.
+
+The only thing that needs to be right is the **base path**: a project site is
+served from `/<repo>/`, not the domain root, and every asset URL has to agree —
+get it wrong and the page loads to a blank screen with a handful of 404s. The
+workflow derives it from the repository name and passes it to Vite as
+`BASE_PATH`, so nothing is hard-coded and `npm run dev` still runs at `/`.
+
+To build a deployable copy locally:
+
+```bash
+BASE_PATH=/mapiiest/ npm run build          # macOS / Linux
+$env:BASE_PATH='/mapiiest/'; npm run build  # PowerShell
+```
+
+On Git Bash for Windows, prefix with `MSYS_NO_PATHCONV=1` or the leading slash
+is rewritten into a Windows path and the build comes out with nonsense URLs.
+
+`public/_headers` is Netlify/Cloudflare syntax. GitHub Pages ignores it — Pages
+cannot set response headers at all — so the caching and security headers there
+only take effect if the site is also deployed to a host that reads that file.
+Nothing depends on them.
+
+### Custom domain
+
+To serve this from a subdomain of a domain you own — say `maps.example.in`:
+
+1. **DNS**, at whoever hosts the zone: add a `CNAME` record with host `maps`
+   pointing at `angadbasandrai.github.io.` — the *user* domain, with no repo
+   path. A CNAME record cannot contain a path; GitHub works out which
+   repository to serve from the `CNAME` file in the deployed site.
+2. **Repo**: create `public/CNAME` containing the bare hostname
+   (`maps.example.in`, no scheme, no trailing slash), and set the same value in
+   Settings → Pages → Custom domain.
+3. **Base path**: a custom domain serves from its own root, so the repo name has
+   to drop out of every asset URL. The workflow already does this — it switches
+   `BASE_PATH` to `/` the moment `public/CNAME` exists, so step 2 is the whole
+   change.
+4. **HTTPS**: GitHub issues a Let's Encrypt certificate once the DNS resolves —
+   usually minutes, occasionally up to a day. Then tick **Enforce HTTPS**.
+
+Two things that commonly go wrong. If the zone is on Cloudflare, leave the
+record **DNS only** (grey cloud) until the certificate is issued; a proxied
+record makes GitHub's validation fail. And verifying the domain at the account
+level (Settings → Pages → Verify domain, a `TXT` record) is worth doing — it
+stops anyone else pointing their Pages site at your subdomain later.
+
+Once a custom domain is live, `angadbasandrai.github.io/mapiiest/` redirects to
+it, so old links keep working.
+
 ## Configuration
 
 Everything campus-specific is in `site.config.json`: the display name, the
