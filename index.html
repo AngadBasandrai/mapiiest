@@ -25,8 +25,10 @@
         <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
         <path d="M10.5 10.5 L14.2 14.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
       </svg>
-      <span class="ph">Search places, layers, commands…</span>
-      <kbd>⌘K</kbd>
+      <span class="ph">Search places and layers…</span>
+      <!-- Ctrl is the default because most of this campus is not on a Mac;
+           src/main.ts swaps it for ⌘ when the visitor is. -->
+      <kbd>Ctrl K</kbd>
     </button>
     <button id="imagery-btn" type="button" aria-pressed="false"
             aria-label="Toggle aerial imagery" title="Aerial imagery off">

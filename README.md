@@ -19,7 +19,8 @@ npm test           # typecheck + rebuild + smoke test
 ## What it does
 
 - **Search** over every place, ranked exact-key → prefix → fuzzy, in well under
-  a millisecond. `⌘K` or `/` anywhere; `↵` opens, `tab` routes there.
+  a millisecond. `Ctrl K` (`⌘K` on a Mac) or `/` anywhere; `↵` opens, `tab`
+  routes there.
 - **Routing** by A\* over the OSM path network, with walking and cycling costs
   baked per edge at build time, so the ETA falls straight out of the search.
 - **Aerial imagery** under the map, on a toggle — see what is actually there.
@@ -49,7 +50,7 @@ and dropping the no-key/offline property of this build.
 The places on this map were put there by hand, with a tagging tool built into
 the app: turn on the pin button, tap the map, name what is there, pick a
 category. Tags are kept in the browser's own storage, listed and deleted from
-`My tags` in `⌘K`, and exported as JSON in exactly the
+`My tags` in `Ctrl K`, and exported as JSON in exactly the
 `data/curated/places.json` shape — so committing a survey is a paste and a
 rebuild, at which point the build checks every row falls inside the campus
 boundary.

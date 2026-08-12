@@ -490,6 +490,16 @@ async function start() {
 
   /* ── chrome ───────────────────────────────────────────────────────────── */
 
+  // The shortcut works on either modifier; the hint should name the one that is
+  // actually under the visitor's thumb. Ctrl ships in the markup so the common
+  // case never flashes the wrong glyph.
+  const uaPlatform = (navigator as unknown as { userAgentData?: { platform?: string } })
+    .userAgentData?.platform ?? navigator.platform ?? ''
+  if (/mac|iphone|ipad|ipod/i.test(uaPlatform || navigator.userAgent)) {
+    const hint = document.querySelector('#open-search kbd')
+    if (hint) hint.textContent = '⌘K'
+  }
+
   const brand = document.getElementById('brand-btn')!
   brand.addEventListener('click', () => showAbout(campus))
   // What is loaded is stated in the About panel; this is the one-line version.

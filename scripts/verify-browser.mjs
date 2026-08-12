@@ -206,13 +206,23 @@ async function check(name, width, height, theme) {
     ok(clash === '', 'layer chips clear the attribution', clash)
   }
 
-  // Open the palette and run a query the way a user would.
-  await page.keyboard.down('Meta'); await page.keyboard.press('KeyK'); await page.keyboard.up('Meta')
+  // The runner is not a Mac, so the hint must name Ctrl — and the search bar
+  // should not be advertising "commands" at people looking for a building.
+  const searchBar = await page.evaluate(() => ({
+    hint: document.querySelector('#open-search kbd')?.textContent?.trim() ?? '',
+    placeholder: document.querySelector('#open-search .ph')?.textContent?.trim() ?? '',
+  }))
+  ok(searchBar.hint === 'Ctrl K', 'the shortcut hint reads Ctrl K off a Mac', searchBar.hint)
+  ok(!/command/i.test(searchBar.placeholder), 'the search placeholder does not mention commands',
+     searchBar.placeholder)
+
+  // Ctrl and Meta both open it; drive the one this platform advertises.
+  await page.keyboard.down('Control'); await page.keyboard.press('KeyK'); await page.keyboard.up('Control')
   const paletteOpen = await page.waitForFunction(
     () => document.getElementById('palette') && !document.getElementById('palette').hidden,
     { timeout: 4000 },
   ).then(() => true).catch(() => false)
-  ok(paletteOpen, 'palette opens on ⌘K')
+  ok(paletteOpen, 'palette opens on the shortcut')
 
   if (paletteOpen) {
     await page.type('#palette-input', QUERY, { delay: 12 })
@@ -250,6 +260,7 @@ async function check(name, width, height, theme) {
       await page.click('#palette-close')
       const shut = await page.evaluate(() => document.getElementById('palette').hidden)
       ok(shut, 'close button dismisses the palette')
+      // Meta as well as Ctrl, so a Mac visitor is covered by the same run.
       await page.keyboard.down('Meta'); await page.keyboard.press('KeyK'); await page.keyboard.up('Meta')
       await page.waitForFunction(() => !document.getElementById('palette').hidden, { timeout: 3000 })
       await page.type('#palette-input', QUERY, { delay: 8 })

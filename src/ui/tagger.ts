@@ -170,7 +170,7 @@ export function showTagForm(lat: number, lon: number, near?: string, done?: () =
     </div>
 
     <p class="p-note">Saved in this browser only — nothing is uploaded. Export
-    the set from <b>My tags</b> in search (<kbd>⌘K</kbd>) when you want to commit
+    the set from <b>My tags</b> in search when you want to commit
     them to <code>data/curated/places.json</code>.</p>
 
     <p class="src">Somewhere real and permanent? It belongs in OpenStreetMap —
