@@ -1,7 +1,5 @@
 import type { Campus, Poi } from '../types'
 import { openNow } from '../search/hours'
-import { humanDistance, humanEta } from '../route/router'
-import { OSM_CAMPUS_URL, SITE } from '../config'
 
 const el = document.getElementById('panel') as HTMLElement
 
@@ -10,8 +8,6 @@ const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) =>
 
 export interface PanelHost {
   campus: Campus
-  routeTo(lat: number, lon: number, label: string): void
-  routeState(): { active: boolean; eta?: number; metres?: number }
   close(): void
 }
 
@@ -22,8 +18,6 @@ export function initPanel(h: PanelHost) {
   el.addEventListener('click', (e) => {
     const t = e.target as HTMLElement
     if (t.closest('.p-close')) { hidePanel(); host.close() }
-    const r = t.closest('[data-route]') as HTMLElement | null
-    if (r) host.routeTo(+r.dataset.lat!, +r.dataset.lon!, r.dataset.label!)
   })
 }
 
@@ -64,13 +58,22 @@ function hoursRow(spec?: string): string | undefined {
   return `${esc(spec)}${badge}`
 }
 
-function routeButtons(lat: number, lon: number, label: string, tagId?: string) {
-  const s = host.routeState()
+/**
+ * Directions are handed off to Google Maps rather than drawn here.
+ *
+ * The campus footpath network barely exists in OpenStreetMap — 34 road segments
+ * and a single footway inside the wall — so a route computed over it would send
+ * people the long way round with a confident ETA attached. Google has the paths
+ * and, more to the point, has the visitor's own position without this site ever
+ * asking for it. Coordinates rather than the name: the name would be a guess at
+ * whatever Google's index thinks it means, the coordinates are the surveyed
+ * spot.
+ */
+function actions(lat: number, lon: number, tagId?: string) {
+  const dest = `${lat.toFixed(6)},${lon.toFixed(6)}`
   return `<div class="p-actions">
-    <button data-route data-lat="${lat}" data-lon="${lon}" data-label="${esc(label)}"
-      class="${s.active ? 'on' : ''}">${s.active && s.eta != null
-        ? `${humanEta(s.eta)} · ${humanDistance(s.metres!)}`
-        : 'Route here'}</button>
+    <a class="primary" target="_blank" rel="noopener"
+       href="https://www.google.com/maps/dir/?api=1&amp;destination=${dest}">Route in Google Maps</a>
     ${import.meta.env.DEV && tagId ? `<button data-tag-del="${esc(tagId)}" class="danger">Delete tag</button>` : ''}
   </div>`
 }
@@ -86,7 +89,7 @@ export function showPoi(p: Poi) {
   const body = [
     // A tag you can see on the map is a tag you should be able to delete from
     // there, without first hunting for it in a list.
-    routeButtons(p.lat, p.lon, p.name, p.user ? p.id : undefined),
+    actions(p.lat, p.lon, p.user ? p.id : undefined),
     kv([
       ['Hours', hoursRow(p.hours)],
       ['Access', wheel ? esc(wheel) : undefined],
@@ -116,74 +119,4 @@ export function showPoi(p: Poi) {
   ].join('')
 
   shell(p.name, cat?.label ?? p.cat, body)
-}
-
-/* ── about ───────────────────────────────────────────────────────────────── */
-
-export function showAbout(campus: Campus) {
-  const total = Object.values(campus.meta.counts).reduce((a, b) => a + b, 0)
-  const seeded = campus.pois.filter((p) => p.src === 'seed').length
-
-  const body = `
-    <p class="p-note">Everything here comes from a public source. Nothing on this
-    map is invented — where there is no source, the feature is simply absent.</p>
-
-    <div class="p-sec">Map &amp; places</div>
-    ${total === 0
-      ? `<p class="p-note">There are <b>no places on this map yet</b>. The ground,
-         the buildings, the paths and the lakes are drawn from
-         <a href="${OSM_CAMPUS_URL}" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL),
-         but every <em>place</em> — every named, searchable, routable pin — is
-         surveyed by hand and committed to the repository, and that has not
-         happened yet. Walking and cycling times are computed over the OSM path
-         network, so routing works as soon as the first one lands.</p>`
-      : `<p class="p-note"><b>${total}</b> places inside the campus wall, of which
-         <b>${total - seeded}</b> come straight from
-         <a href="${OSM_CAMPUS_URL}" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)
-         and <b>${seeded}</b> from an on-campus survey. Geometry, opening hours and
-         wheelchair tags come from the same extract. Walking and cycling times are
-         computed over the OSM path network — no external routing service.</p>`}
-
-    <div class="p-sec">How it is built</div>
-    <p class="p-note">One Overpass query per layer, a build step that classifies
-    every tagged feature into one of ${Object.keys(campus.categories).length}
-    categories, and an A* search over the path graph. The basemap is drawn from
-    that same GeoJSON: no tile server and no API key. The only request that ever
-    leaves this page is the aerial imagery, and only while you have it switched
-    on — those tiles come from Esri's World Imagery, the layer OpenStreetMap's
-    own editor uses for tracing.</p>
-
-    <div class="p-sec">Where the places came from</div>
-    <p class="p-note">Every place here was walked and recorded on campus, then
-    committed to <code>data/curated/places.json</code> in the repository. Nothing
-    was guessed from a name or inferred from a footprint. If something is wrong
-    or missing, it is a change to that file —
-    <a href="${esc(SITE.repo)}/issues" target="_blank" rel="noopener">open an issue</a>.</p>
-
-    ${import.meta.env.DEV ? `<div class="p-sec">Tag mode (dev build)</div>
-    <p class="p-note">This build has the surveying tool switched on: tag mode in
-    the top bar, tags kept in this browser only, exported as a
-    <code>places.json</code> fragment from <b>My tags</b> in search. It is not
-    part of the published site.</p>` : ''}
-
-    <div class="p-sec">Coverage is thin — help fix it</div>
-    <p class="p-note">${SITE.name} is far less mapped than it deserves. Most of the
-    academic blocks are unnamed footprints, and the footpath network barely
-    exists, so a walking route may follow the roads rather than the shortcut you
-    would actually take. All of that — building names, canteens, water coolers,
-    cycle stands, printers, opening hours, step-free entrances — belongs in
-    <a href="${OSM_CAMPUS_URL}" target="_blank" rel="noopener">OpenStreetMap</a>.
-    Map it once there and it lands here on the next build, and in every other
-    map that reads OSM. Switch the aerial layer on to see how much of the campus
-    has no footprint drawn over it at all.</p>
-
-    <div class="p-sec">Not here</div>
-    <p class="p-note">Faculty directories, mess menus, course timetables, notices
-    and bus timings. Each one needs a real, machine-readable source; there is no
-    honest way to ship them without one.</p>
-
-    <p class="src">Built ${esc(campus.meta.built)} · ${esc(campus.meta.attribution)}
-    · <a href="${esc(SITE.repo)}" target="_blank" rel="noopener">source</a></p>`
-
-  shell(`${SITE.brand.head}${SITE.brand.tail}`, 'About & sources', body)
 }

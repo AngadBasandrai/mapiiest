@@ -1,13 +1,12 @@
 import './styles.css'
 import maplibregl from 'maplibre-gl'
-import type { Campus, Graph, Poi, Profile } from './types'
+import type { Campus, Poi } from './types'
 import { buildStyle, applyImagery, IMAGERY } from './map/style'
-import { Router, humanEta, humanDistance } from './route/router'
 import { SearchIndex, type Hit } from './search/engine'
 import { initPalette, openPalette } from './ui/palette'
-import { initPanel, showAbout, showPoi, hidePanel } from './ui/panel'
+import { initPanel, showPoi, hidePanel } from './ui/panel'
 import { cycle as cycleTheme, current as themeChoice, onThemeChange, resolved } from './ui/theme'
-import { SITE, onCampus, panBounds } from './config'
+import { SITE, panBounds } from './config'
 
 const boot = document.getElementById('boot')!
 const base = import.meta.env.BASE_URL
@@ -19,13 +18,10 @@ async function json<T>(path: string): Promise<T> {
 }
 
 async function start() {
-  const [campus, geo, graphData] = await Promise.all([
+  const [campus, geo] = await Promise.all([
     json<Campus>('campus.json'),
     json<Record<string, GeoJSON.FeatureCollection>>('geo.json'),
-    json<Graph>('graph.json'),
   ])
-
-  const router = new Router(graphData)
 
   let pois: Poi[] = []
   let byId = new Map<string, Poi>()
@@ -88,11 +84,6 @@ async function start() {
   // Handle for scripts/verify-browser.mjs and for poking at the map in devtools.
   ;(window as unknown as { __map: maplibregl.Map }).__map = map
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
-  const geolocate = new maplibregl.GeolocateControl({
-    positionOptions: { enableHighAccuracy: true },
-    trackUserLocation: true,
-  })
-  map.addControl(geolocate, 'bottom-right')
 
   /* ── layer state ──────────────────────────────────────────────────────── */
 
@@ -200,107 +191,6 @@ async function start() {
     rail.classList.contains('open') ? closeLayers() : openLayers())
   scrim.addEventListener('click', closeLayers)
 
-  /* ── routing ──────────────────────────────────────────────────────────── */
-
-  let profile: Profile = 'foot'
-  let origin: { lat: number; lon: number; label: string } | null = null
-  let target: { lat: number; lon: number; label: string } | null = null
-  /** Metrics of the last successful route, so the panel button can show the ETA. */
-  let lastRoute: { seconds: number; metres: number } | null = null
-
-  const badge = document.createElement('div')
-  badge.id = 'route-badge'
-  badge.hidden = true
-  document.body.append(badge)
-
-  function clearRoute() {
-    target = null
-    lastRoute = null
-    badge.hidden = true
-    ;(map.getSource('route') as maplibregl.GeoJSONSource | undefined)
-      ?.setData({ type: 'FeatureCollection', features: [] })
-  }
-
-  function drawRoute() {
-    if (!target) return
-    const from = origin ?? campusCentreNode()
-    const r = router.route(from, target, profile)
-    const src = map.getSource('route') as maplibregl.GeoJSONSource | undefined
-
-    if (!r) {
-      lastRoute = null
-      badge.hidden = false
-      badge.innerHTML = `<span>No path found on the mapped network</span>
-        <button class="x" data-clear aria-label="Clear route">&times;</button>`
-      src?.setData({ type: 'FeatureCollection', features: [] })
-      return
-    }
-    lastRoute = { seconds: r.seconds, metres: r.metres }
-
-    src?.setData({
-      type: 'FeatureCollection',
-      features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: r.coords } }],
-    })
-
-    const notes = [
-      r.steps ? 'steps' : '',
-      r.unpaved ? 'unpaved shortcut' : '',
-      r.indoor ? 'indoor corridor' : '',
-    ].filter(Boolean).join(' · ')
-
-    badge.hidden = false
-    badge.innerHTML = `
-      <span class="eta">${humanEta(r.seconds)}</span>
-      <span>${humanDistance(r.metres)}</span>
-      <span class="mode">
-        <button data-mode="foot" class="${profile === 'foot' ? 'on' : ''}">walk</button>
-        <button data-mode="bike" class="${profile === 'bike' ? 'on' : ''}">cycle</button>
-      </span>
-      <span class="via">${origin ? '' : 'from campus centre · '}to ${escapeHtml(target.label)}${notes ? ` · ${notes}` : ''}</span>
-      <button class="x" data-clear aria-label="Clear route">&times;</button>`
-
-    map.fitBounds(bounds(r.coords), { padding: { top: 80, bottom: 110, left: 60, right: 380 }, maxZoom: 17.5 })
-  }
-
-  badge.addEventListener('click', (e) => {
-    const t = e.target as HTMLElement
-    if (t.dataset.clear !== undefined) { clearRoute(); return }
-    if (t.dataset.mode) { profile = t.dataset.mode as Profile; drawRoute() }
-  })
-
-  function campusCentreNode() {
-    return { lat: campus.meta.center[1], lon: campus.meta.center[0], label: 'campus centre' }
-  }
-
-  function routeTo(lat: number, lon: number, label: string) {
-    target = { lat, lon, label }
-    drawRoute()
-  }
-
-  // Use the browser's location as the route origin when it is on campus.
-  map.on('load', () => {
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => {
-        const { latitude: lat, longitude: lon } = pos.coords
-        if (onCampus(campus, lat, lon)) {
-          origin = { lat, lon, label: 'you' }
-          if (target) drawRoute()
-        }
-      },
-      () => {},
-      { timeout: 6000, maximumAge: 120_000 },
-    )
-
-    // Switch the locate control on for anyone who has already granted the
-    // permission, so the blue dot is there without being asked for. Only when
-    // it is already granted: `prompt` would throw a permission dialog at every
-    // first-time visitor before they have seen the map, and `denied` would put
-    // the control into its error state for no reason.
-    navigator.permissions?.query({ name: 'geolocation' })
-      .then((status) => { if (status.state === 'granted') geolocate.trigger() })
-      .catch(() => {}) // Safari and friends: no permissions API, so leave it off
-  })
-
   /* ── selection ────────────────────────────────────────────────────────── */
 
   /** Nudge the map so the focused point is not hidden by the panel or sheet. */
@@ -343,13 +233,7 @@ async function start() {
     onAction: (id: string) => {
       if (id === 'layers-all') { cats.forEach(([c]) => active.add(c)); refreshPois() }
       if (id === 'layers-none') { active.clear(); refreshPois() }
-      if (id === 'clear-route') clearRoute()
-      if (id === 'about') showAbout(campus)
       if (id === 'imagery') setImagery(!imagery)
-      if (id === 'locate') {
-        navigator.geolocation?.getCurrentPosition((pos) =>
-          map.easeTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 17 }))
-      }
       devActions[id]?.()
     },
   }
@@ -367,12 +251,6 @@ async function start() {
 
   initPanel({
     campus,
-    routeTo,
-    routeState: () => ({
-      active: !!target,
-      eta: lastRoute?.seconds,
-      metres: lastRoute?.metres,
-    }),
     close: () => { focusId = null; refreshPois() },
   })
 
@@ -381,7 +259,6 @@ async function start() {
     get index() { return index },
     campus,
     open: openHit,
-    routeTo: (hit) => { if (hit.lat != null) routeTo(hit.lat, hit.lon!, hit.title) },
   })
 
   /* ── imagery ──────────────────────────────────────────────────────────── */
@@ -500,12 +377,6 @@ async function start() {
     if (hint) hint.textContent = '⌘K'
   }
 
-  const brand = document.getElementById('brand-btn')!
-  brand.addEventListener('click', () => showAbout(campus))
-  // What is loaded is stated in the About panel; this is the one-line version.
-  brand.title = campus.pois.length
-    ? `${campus.pois.length} places — click for sources`
-    : 'No places yet — click for how this map is built'
 
   /* ── theme ────────────────────────────────────────────────────────────── */
 
@@ -528,7 +399,6 @@ async function start() {
     map.once('styledata', () => {
       applyImagery(map, imagery)
       refreshPois()
-      if (target) drawRoute()
     })
   })
 
@@ -562,19 +432,6 @@ async function start() {
     if (id && byId.has(id)) focusPoi(byId.get(id)!)
     else if (q) openPalette(q)
   })
-}
-
-function bounds(coords: [number, number][]): [[number, number], [number, number]] {
-  let w = 180, s = 90, e = -180, n = -90
-  for (const [lon, lat] of coords) {
-    w = Math.min(w, lon); e = Math.max(e, lon)
-    s = Math.min(s, lat); n = Math.max(n, lat)
-  }
-  return [[w, s], [e, n]]
-}
-
-function escapeHtml(s: string) {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 }
 
 start().catch((err) => {

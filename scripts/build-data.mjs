@@ -1,5 +1,5 @@
 // Turns data/raw/*.json (OpenStreetMap) + data/curated/*.json (hand-maintained)
-// into the three files the app loads: public/data/{campus,geo,graph}.json
+// into the two files the app loads: public/data/{campus,geo}.json
 //
 //   node scripts/build-data.mjs
 //
@@ -151,14 +151,6 @@ function classify(t) {
 
 const R = 6371008.8
 const rad = (d) => (d * Math.PI) / 180
-
-function haversine(aLat, aLon, bLat, bLon) {
-  const dLat = rad(bLat - aLat)
-  const dLon = rad(bLon - aLon)
-  const s = Math.sin(dLat / 2) ** 2 +
-    Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLon / 2) ** 2
-  return 2 * R * Math.asin(Math.sqrt(s))
-}
 
 function centroid(geometry) {
   // Area-weighted centroid for closed rings, mean otherwise. Keeps labels
@@ -469,145 +461,6 @@ async function main() {
     buildings: fc(buildingF),
   }
 
-  /* ── routing graph ────────────────────────────────────────────────────── */
-  // OSM `out geom` gives coordinates but not node ids, so topology comes from
-  // exact coordinate identity — shared nodes serialise to identical lat/lon.
-  const key = (lat, lon) => `${lat.toFixed(7)},${lon.toFixed(7)}`
-  const nodeIndex = new Map()
-  const nodeLat = [], nodeLon = []
-  const getNode = (lat, lon) => {
-    const k = key(lat, lon)
-    let i = nodeIndex.get(k)
-    if (i === undefined) {
-      i = nodeLat.length
-      nodeIndex.set(k, i)
-      nodeLat.push(+lat.toFixed(6))
-      nodeLon.push(+lon.toFixed(6))
-    }
-    return i
-  }
-
-  // Edge cost model. Cost is in seconds; ETA falls straight out of the search.
-  const WALK = 1.35 // m/s — ~4.9 km/h, a normal campus walking pace
-  const BIKE = 4.2  // m/s — ~15 km/h on open road
-
-  function speeds(t) {
-    const hw = t.highway
-    // Steps and indoor corridors are passable by bike only on foot, pushing it.
-    // Modelling them as forbidden instead would strand any building whose
-    // nearest network node is a corridor — you can always walk the last stretch.
-    if (hw === 'steps') return { foot: WALK * 0.45, bike: 0.6, dismount: true }
-    if (hw === 'corridor') return { foot: WALK * 0.85, bike: 0.9, indoor: true }
-    if (hw === 'cycleway') return { foot: WALK, bike: BIKE }
-    if (hw === 'footway' || hw === 'pedestrian' || hw === 'path') {
-      const bikeOk = t.bicycle !== 'no'
-      return { foot: WALK, bike: bikeOk ? BIKE * 0.72 : 0 }
-    }
-    if (hw === 'track') return { foot: WALK * 0.9, bike: BIKE * 0.6 }
-    if (hw === 'service' || hw === 'living_street' || hw === 'residential' ||
-        hw === 'unclassified') return { foot: WALK, bike: BIKE }
-    if (hw === 'tertiary' || hw === 'secondary' || hw === 'tertiary_link') {
-      return { foot: WALK * 0.95, bike: BIKE }
-    }
-    if (hw === 'trunk' || hw === 'primary' || hw === 'trunk_link' || hw === 'motorway') {
-      // Fast road with no footway tagged — walkable but unpleasant, so penalise.
-      if (t.foot === 'no') return { foot: 0, bike: BIKE }
-      return { foot: WALK * 0.6, bike: BIKE * 0.9 }
-    }
-    return { foot: WALK, bike: BIKE * 0.8 }
-  }
-
-  const edges = [] // [a, b, metres, footSec, bikeSec, flags]
-  const FLAG_STEPS = 1, FLAG_INDOOR = 2, FLAG_LIT = 4, FLAG_SHORTCUT = 8
-
-  for (const el of highways.elements) {
-    if (!el.geometry || el.geometry.length < 2) continue
-    const t = el.tags || {}
-    if (t.access === 'private' || t.access === 'no') continue
-    if (!el.geometry.some((p) => inCampus(p.lon, p.lat))) continue
-
-    const sp = speeds(t)
-    let flags = 0
-    if (sp.dismount) flags |= FLAG_STEPS
-    if (sp.indoor) flags |= FLAG_INDOOR
-    if (t.lit === 'yes') flags |= FLAG_LIT
-    // "Shortcut": an unpaved desire line — the trodden paths students actually use.
-    if ((t.highway === 'path' || t.highway === 'track') &&
-        !['paved', 'asphalt', 'concrete', 'paving_stones'].includes(t.surface)) {
-      flags |= FLAG_SHORTCUT
-    }
-
-    for (let i = 0; i < el.geometry.length - 1; i++) {
-      const p = el.geometry[i], q = el.geometry[i + 1]
-      const a = getNode(p.lat, p.lon), b = getNode(q.lat, q.lon)
-      if (a === b) continue
-      const m = haversine(p.lat, p.lon, q.lat, q.lon)
-      if (m < 0.05) continue
-      // -1 means "this profile cannot use this edge". Keep two decimals: an
-      // integer round would send every edge under ~2 m to zero, and a zero-cost
-      // edge is indistinguishable from a forbidden one.
-      const round2 = (x) => Math.round(x * 100) / 100
-      const footSec = sp.foot > 0 ? round2(m / sp.foot) : -1
-      const bikeSec = sp.bike > 0 ? round2(m / sp.bike) : -1
-      edges.push([a, b, Math.round(m * 10) / 10, footSec, bikeSec, flags])
-    }
-  }
-
-  // Largest connected component only — stray disconnected stubs make routing
-  // fail in ways that look like bugs to the user.
-  const adj = Array.from({ length: nodeLat.length }, () => [])
-  edges.forEach(([a, b], i) => { adj[a].push(i); adj[b].push(i) })
-  const comp = new Int32Array(nodeLat.length).fill(-1)
-  let best = -1, bestSize = 0
-  for (let s = 0, c = 0; s < nodeLat.length; s++) {
-    if (comp[s] !== -1) continue
-    let size = 0
-    const stack = [s]
-    comp[s] = c
-    while (stack.length) {
-      const n = stack.pop(); size++
-      for (const ei of adj[n]) {
-        const e = edges[ei]
-        const o = e[0] === n ? e[1] : e[0]
-        if (comp[o] === -1) { comp[o] = c; stack.push(o) }
-      }
-    }
-    if (size > bestSize) { bestSize = size; best = c }
-    c++
-  }
-
-  const remap = new Int32Array(nodeLat.length).fill(-1)
-  const gLat = [], gLon = []
-  for (let i = 0; i < nodeLat.length; i++) {
-    if (comp[i] !== best) continue
-    remap[i] = gLat.length
-    gLat.push(nodeLat[i]); gLon.push(nodeLon[i])
-  }
-  const gEdges = []
-  for (const [a, b, m, f, k, fl] of edges) {
-    if (comp[a] !== best) continue
-    gEdges.push([remap[a], remap[b], m, f, k, fl])
-  }
-
-  const graph = {
-    note: 'Costs are seconds; -1 = that profile cannot use the edge. flags: 1=steps 2=indoor 4=lit 8=unpaved-shortcut',
-    lat: gLat, lon: gLon, edges: gEdges,
-    dropped: nodeLat.length - gLat.length,
-  }
-
-  // A POI whose nearest graph node is far away routes to the wrong door, or to
-  // a road on the other side of a wall. Worth knowing about.
-  const FAR = 90 // metres
-  for (const p of poiList) {
-    if (!CATEGORIES[p.cat]?.pin) continue
-    let d = Infinity
-    for (let i = 0; i < gLat.length; i++) {
-      d = Math.min(d, haversine(p.lat, p.lon, gLat[i], gLon[i]))
-      if (d < FAR) break
-    }
-    if (d >= FAR) warn(`"${p.name}" is ${Math.round(d)} m from the nearest mapped path`)
-  }
-
   /* ── output ───────────────────────────────────────────────────────────── */
   const counts = {}
   for (const p of poiList) counts[p.cat] = (counts[p.cat] || 0) + 1
@@ -631,7 +484,6 @@ async function main() {
   await mkdir(OUT, { recursive: true })
   await writeFile(join(OUT, 'campus.json'), JSON.stringify(campus))
   await writeFile(join(OUT, 'geo.json'), JSON.stringify(geo))
-  await writeFile(join(OUT, 'graph.json'), JSON.stringify(graph))
 
   const kb = (o) => (JSON.stringify(o).length / 1024).toFixed(0) + ' kB'
   console.log(`places     ${poiList.length} (${poiList.length - curatedCount} osm + ${curatedCount} curated)`)
@@ -643,11 +495,10 @@ async function main() {
     console.log(`  ${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${v}`).join('  ')}`)
   }
   console.log(`geo        ${buildingF.length} buildings, ${pathF.length} paths, ${roadF.length} roads, ${greenF.length} green`)
-  console.log(`graph      ${gLat.length} nodes, ${gEdges.length} edges (${graph.dropped} off-network nodes dropped)`)
   for (const k of Object.keys(curated)) {
     console.log(`curated    ${k}: ${curated[k]?.items?.length ?? 0} items`)
   }
-  console.log(`output     campus ${kb(campus)}, geo ${kb(geo)}, graph ${kb(graph)}`)
+  console.log(`output     campus ${kb(campus)}, geo ${kb(geo)}`)
   if (warnings.length) {
     console.log(`\n${warnings.length} warning(s):`)
     for (const w of [...new Set(warnings)].slice(0, 25)) console.log(`  ! ${w}`)

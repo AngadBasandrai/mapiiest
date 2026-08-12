@@ -1,8 +1,8 @@
 # IIEST Shibpur campus map
 
 A map of IIEST Shibpur: the ground, the buildings, the paths and the lakes drawn
-from OpenStreetMap, aerial imagery on a toggle, walking and cycling routes — and
-**every place put on it by hand**.
+from OpenStreetMap, aerial imagery on a toggle — and **every place put on it by
+hand**.
 
 No place on it is derived from an OpenStreetMap tag. OSM's coverage of this
 campus is thin enough that auto-classifying it produces a sparse, half-wrong
@@ -19,10 +19,9 @@ npm test           # typecheck + rebuild + smoke test
 ## What it does
 
 - **Search** over every place, ranked exact-key → prefix → fuzzy, in well under
-  a millisecond. `Ctrl K` (`⌘K` on a Mac) or `/` anywhere; `↵` opens, `tab`
-  routes there.
-- **Routing** by A\* over the OSM path network, with walking and cycling costs
-  baked per edge at build time, so the ETA falls straight out of the search.
+  a millisecond. `Ctrl K` (`⌘K` on a Mac) or `/` anywhere, `↵` to open.
+- **Directions** handed off to Google Maps: a place's panel links straight out
+  to `maps.google.com` for that exact coordinate.
 - **Aerial imagery** under the map, on a toggle — see what is actually there.
 - **Layers** — one per category, appearing as you tag; a bottom sheet on phones.
 - **Light and dark**, following the system unless you say otherwise.
@@ -78,19 +77,18 @@ site.config.json   campus name, repo, the OSM way id of the boundary
 data/raw/          Overpass responses, committed so a build needs no network
 data/curated/      hand-surveyed places OSM does not carry yet
 scripts/           fetch-osm, build-data, smoke, verify-browser
-src/               map style, router, search engine, UI
+src/               map style, search engine, UI
 public/font/       MapLibre glyph PBFs (Noto Sans, OFL)
 ```
 
 `scripts/fetch-osm.mjs` pulls five Overpass queries into `data/raw/`.
-`scripts/build-data.mjs` turns those plus `data/curated/` into the three files
+`scripts/build-data.mjs` turns those plus `data/curated/` into the two files
 the app loads:
 
 | file | what |
 | --- | --- |
 | `campus.json` | places, categories, and the campus centre/bbox |
 | `geo.json` | the entire basemap as GeoJSON — boundary, buildings, roads, paths, green, water |
-| `graph.json` | routing nodes and edges, costs in seconds per profile |
 
 The basemap really is drawn from that GeoJSON: MapLibre renders it directly, so
 there is no tile server involved and the whole map is a few hundred kB. (The
@@ -134,9 +132,8 @@ way, refetch, and it frames itself.
 ```
 
 With it off — the default here — **no place is derived from an OSM tag**. The
-build still draws every building footprint, road, path, lake and the boundary,
-and still builds the routing graph; it just does not turn any of it into a
-named, searchable pin. Everything on the map comes from you.
+build still draws every building footprint, road, path, lake and the boundary;
+it just does not turn any of it into a named, searchable pin. Everything on the map comes from you.
 
 Flip it to `true` and rerun `npm run build:data` and the classifier takes over
 again: it finds 37 places from the current extract (17 halls of residence,
@@ -150,9 +147,7 @@ The reason to leave it off is that OSM simply does not know this campus:
 - most academic departments (mapped as unnamed `building=university` footprints)
 - canteens, messes, shops, printers
 - water coolers, cycle stands, ATMs, toilets
-- the footpath network — 33 roads but only **1 footway** inside the wall, so a
-  walking route currently follows the roads rather than the shortcut you would
-  actually take
+- the footpath network — 33 roads but only **1 footway** inside the wall
 
 Switch the aerial layer on and the scale of it is plain: whole rows of academic
 blocks with no footprint drawn over them at all.
@@ -179,10 +174,9 @@ without one.
 ## Tests
 
 `npm test` typechecks, rebuilds the data and runs `scripts/smoke.mjs`, which
-asserts that the basemap and routing graph are intact, that every place is
-findable by its own name, that the category vocabulary works even for categories
-nothing has landed in yet, that routing holds up on both profiles with cycling
-never slower than walking, and that the MapLibre style validates in both themes.
+asserts that the basemap is intact, that every place is findable by its own
+name, that the category vocabulary works even for categories nothing has landed
+in yet, and that the MapLibre style validates in both themes.
 It also checks that every element id the TypeScript reaches for exists in
 `index.html` — that mismatch otherwise ships as a blank page.
 
@@ -193,16 +187,18 @@ tests is the shape the public gets.
 
 `npm run verify` drives the built site in headless Chrome at three viewports and
 fails on any console error, failed request, or map that never painted. It picks a
-real place out of the current data, searches it, opens it, routes to it, toggles
-the imagery layer, and confirms there is no way to edit anything. It needs a
+real place out of the current data, searches it, opens it, checks its Google
+Maps link carries that place's own coordinates, toggles the imagery layer, and
+confirms the page neither asks for your location nor offers any way to edit
+anything. It needs a
 server on `:5180` (`npx vite preview`) and a Chrome on `PATH` or `CHROME_PATH`;
 `--url` points it at any other origin, including the live site.
 
 ## Deploying
 
 Pushing to `main` builds and publishes to GitHub Pages via
-`.github/workflows/pages.yml`. Live at
-**https://angadbasandrai.github.io/mapiiest/**.
+`.github/workflows/pages.yml`. Live at **https://maps.grafitelab.in/**, with
+`angadbasandrai.github.io/mapiiest/` redirecting to it.
 
 The only thing that needs to be right is the **base path**: a project site is
 served from `/<repo>/`, not the domain root, and every asset URL has to agree —
@@ -270,16 +266,15 @@ to it, so existing links keep working.
 
 Everything campus-specific is in `site.config.json`: the display name, the
 wordmark, the repo link, the OSM way id plus bbox used by the fetch, and the
-`places.fromOsm` switch above. Set `repo` before publishing — it ships as a
-placeholder.
+`places.fromOsm` switch above.
 
 ## Credit
 
 This started as a port of [ni5arga/iitk](https://github.com/ni5arga/iitk),
-© 2026 ni5arga, MIT licensed — the same idea built for IIT Kanpur. The router,
-the opening-hours reader, the search scoring, the map style, most of the
-stylesheet and the build pipeline all came from there, and its copyright notice
-is carried in `LICENSE` accordingly. `LICENSE` lists file by file what was
+© 2026 ni5arga, MIT licensed — the same idea built for IIT Kanpur. The
+opening-hours reader, the search scoring, the map style, most of the stylesheet
+and the build pipeline all came from there, and its copyright notice is carried
+in `LICENSE` accordingly. `LICENSE` lists file by file what was
 inherited and what is new here.
 
 ## Licence

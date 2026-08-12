@@ -32,17 +32,20 @@ Substantial portions of the source originate there and are used under the terms
 above, which is why that copyright notice is reproduced alongside ours. The
 parts carried over largely unchanged:
 
-  src/route/router.ts     A* over the path network, the CSR adjacency, the heap
   src/search/hours.ts     the partial `opening_hours` reader
   src/search/engine.ts    the fuzzy scoring and the document/index model
   src/map/style.ts        the MapLibre style and both colour palettes
   src/styles.css          the design tokens and most of the layout
-  scripts/build-data.mjs  the Overpass -> GeoJSON + routing-graph pipeline
+  scripts/build-data.mjs  the Overpass -> GeoJSON pipeline and the classifier
   scripts/smoke.mjs       the test harness shape
 
 What is new here: the aerial imagery layer, the surveying tool the places were
 collected with, boundary-derived map framing, the `places.fromOsm` switch, and
 the categories and classifier rules this campus needed.
+
+Since removed from this fork: the A* router and its routing-graph build step,
+the in-page route display, and the About panel. Directions are a link out to
+Google Maps instead.
 
 ---
 

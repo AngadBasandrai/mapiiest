@@ -32,15 +32,7 @@ await build({
 })
 const { SearchIndex } = await fresh(TMP)
 
-const ROUTER_TMP = join(ROOT, 'node_modules/.cache/smoke-router.mjs')
-await build({
-  entryPoints: [join(ROOT, 'src/route/router.ts')],
-  bundle: true, format: 'esm', platform: 'node', outfile: ROUTER_TMP, logLevel: 'silent',
-})
-const { Router, humanEta } = await fresh(ROUTER_TMP)
-
 const campus = JSON.parse(await readFile(join(ROOT, 'public/data/campus.json'), 'utf8'))
-const graph = JSON.parse(await readFile(join(ROOT, 'public/data/graph.json'), 'utf8'))
 const geo = JSON.parse(await readFile(join(ROOT, 'public/data/geo.json'), 'utf8'))
 const site = JSON.parse(await readFile(join(ROOT, 'site.config.json'), 'utf8'))
 const FROM_OSM = site.places?.fromOsm === true
@@ -71,9 +63,6 @@ ok(geo.roads.features.length + geo.paths.features.length > 10,
    `${geo.roads.features.length + geo.paths.features.length} roads and paths drawn`)
 ok(geo.boundary.features.length === 1, 'campus boundary drawn')
 ok(Array.isArray(campus.meta.bbox) && campus.meta.bbox.length === 2, 'campus bbox present for framing')
-ok(graph.lat.length >= 50, `${graph.lat.length} routing nodes`)
-ok(graph.dropped === 0 || graph.dropped / (graph.lat.length + graph.dropped) < 0.35,
-   `routing graph is mostly one component (${graph.dropped} nodes dropped)`)
 
 /* ── search ──────────────────────────────────────────────────────────────── */
 
@@ -158,79 +147,6 @@ for (const q of ['h', 'hostel', 'central library', 'water cooler', 'a']) {
   ok(per < 12, `"${q}" ${per.toFixed(2)}ms/query`)
 }
 
-/* ── routing ─────────────────────────────────────────────────────────────── */
-
-console.log('\nrouting')
-const router = new Router(graph)
-
-const straightM = (a, b) => Math.hypot((a.lat - b.lat) * 111320, (a.lon - b.lon) * 102900)
-
-// Route between the furthest-apart pinned places rather than a hand-written
-// list of names, so the test does not rot when OSM renames a building. With no
-// places on the map, corners of the path network stand in for them — routing
-// has to work before the first tag is placed, not after.
-const pinned = campus.pois.filter((p) => campus.categories[p.cat]?.pin)
-const endpoints = pinned.length >= 2
-  ? pinned
-  : [0, 1, 2, 3].map((q) => {
-      // One node per quadrant of the network's own bounding box.
-      const lats = graph.lat, lons = graph.lon
-      const midLat = (Math.min(...lats) + Math.max(...lats)) / 2
-      const midLon = (Math.min(...lons) + Math.max(...lons)) / 2
-      const wantN = q < 2, wantE = q % 2 === 0
-      const i = lats.findIndex((la, k) =>
-        (la >= midLat) === wantN && (lons[k] >= midLon) === wantE)
-      return i < 0 ? null : { name: `network node ${i}`, lat: lats[i], lon: lons[i] }
-    }).filter(Boolean)
-
-const pairs = []
-for (let i = 0; i < endpoints.length && pairs.length < 4; i++) {
-  const a = endpoints[i]
-  let far = null, d = 0
-  for (const b of endpoints) {
-    const m = straightM(a, b)
-    if (m > d) { d = m; far = b }
-  }
-  if (far && d > 120) pairs.push([a, far])
-}
-ok(pairs.length > 0, `${pairs.length} route pairs to test`,
-   pinned.length >= 2 ? 'from pinned places' : 'from the path network (no places on the map yet)')
-
-for (const [A, B] of pairs) {
-  const walk = router.route(A, B, 'foot')
-  const bike = router.route(A, B, 'bike')
-  if (!walk || !bike) {
-    ok(false, `${A.name} -> ${B.name}`, `no route on ${!walk && !bike ? 'either profile' : !walk ? 'foot' : 'bike'}`)
-    continue
-  }
-  const detour = walk.metres / Math.max(straightM(A, B), 1)
-  ok(detour > 0.95 && detour < 3 && bike.seconds < walk.seconds,
-     `${A.name} -> ${B.name}`,
-     `${walk.metres}m walk ${humanEta(walk.seconds)} / cycle ${humanEta(bike.seconds)} (detour ${detour.toFixed(2)}x)`)
-}
-
-// Every pinned POI must be reachable on BOTH profiles. Checking only `foot`
-// hides bugs where a building entered via an indoor corridor is unreachable
-// by bike.
-const centre = { lat: campus.meta.center[1], lon: campus.meta.center[0] }
-for (const profile of ['foot', 'bike']) {
-  const bad = pinned.filter((p) => !router.route(centre, p, profile))
-  ok(bad.length === 0, `all ${pinned.length} pinned places reachable by ${profile}`,
-     bad.length ? `${bad.length} unreachable, e.g. ${bad.slice(0, 3).map((p) => p.name).join(', ')}` : '')
-}
-
-// Cycling should never be slower than walking over the same pair.
-const slower = pinned.slice(0, 60).filter((p) => {
-  const w = router.route(centre, p, 'foot'), c = router.route(centre, p, 'bike')
-  return w && c && c.seconds > w.seconds
-})
-ok(slower.length === 0, 'cycling never slower than walking',
-   slower.length ? `${slower.length} pairs, e.g. ${slower[0].name}` : '')
-
-const t0 = performance.now()
-for (let i = 0; i < 30; i++) router.route(centre, endpoints[i % endpoints.length], 'foot')
-ok((performance.now() - t0) / 30 < 40, `route latency ${((performance.now() - t0) / 30).toFixed(1)}ms`)
-
 /* ── map style ───────────────────────────────────────────────────────────── */
 
 // MapLibre validates the style at runtime and refuses to render if it is
@@ -300,7 +216,6 @@ ok(orphans.length === 0, `all ${wanted.size} referenced ids exist in index.html`
    orphans.map(([id, f]) => `#${id} (${f})`).join(', '))
 
 await rm(TMP, { force: true })
-await rm(ROUTER_TMP, { force: true })
 await rm(STYLE_TMP, { force: true })
 
 console.log(failures ? `\n${failures} failure(s)\n` : '\nall good\n')

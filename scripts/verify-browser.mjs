@@ -87,6 +87,19 @@ async function check(name, width, height, theme) {
     if (r.status() >= 400 && ours(r.url())) failed.push(`HTTP ${r.status()} ${r.url()}`)
   })
 
+  // Trip a flag if anything reaches for the Geolocation API. A permission
+  // prompt never appears in headless Chrome, so the only way to catch a site
+  // that still asks is to watch the call itself.
+  await page.evaluateOnNewDocument(() => {
+    window.__geoCalled = false
+    const g = navigator.geolocation
+    if (!g) return
+    for (const fn of ['getCurrentPosition', 'watchPosition']) {
+      const orig = g[fn].bind(g)
+      g[fn] = (...args) => { window.__geoCalled = true; return orig(...args) }
+    }
+  })
+
   await page.goto(URL_, { waitUntil: 'networkidle2', timeout: 30_000 })
 
   // The boot overlay only clears once MapLibre fires `load`.
@@ -291,31 +304,36 @@ async function check(name, width, height, theme) {
     ok(labelled, `map labels rendering (${labelCount})`,
        labelled ? '' : 'glyphs failed or minzoom too high')
 
-    const hasRoute = await page.$('#panel [data-route]') !== null
-    ok(hasRoute, 'panel offers a route button')
-    if (hasRoute) {
-      await page.click('#panel [data-route]')
-      const routed = await page.waitForFunction(
-        () => { const b = document.getElementById('route-badge'); return b && !b.hidden },
-        { timeout: 4000 },
-      ).then(() => true).catch(() => false)
-      const eta = await page.evaluate(() =>
-        document.querySelector('#route-badge .eta')?.textContent ?? '')
-      ok(routed && eta !== '', 'routing draws a path with an ETA', eta)
-
-      // The badge is centred on the same edge the legend is anchored to, and
-      // it draws on top — a wide legend disappears under it without this.
-      if (!sheetMode) {
-        const hidden = await page.evaluate(() => {
-          const b = document.getElementById('route-badge').getBoundingClientRect()
-          return [...document.querySelectorAll('#layer-chips .chip')].filter((c) => {
-            const r = c.getBoundingClientRect()
-            return r.right > b.left && r.left < b.right && r.bottom > b.top && r.top < b.bottom
-          }).map((c) => c.dataset.cat)
-        })
-        ok(hidden.length === 0, 'the route badge covers no layer chip', hidden.join(', '))
+    // Directions hand off to Google Maps. The link has to carry this place's
+    // own coordinates and open away from the page, or someone gets sent to
+    // whatever Google guessed from a name.
+    const dir = await page.evaluate(() => {
+      const a = document.querySelector('#panel .p-actions a')
+      return a ? { href: a.getAttribute('href'), target: a.getAttribute('target'),
+                   rel: a.getAttribute('rel'), text: a.textContent.trim() } : null
+    })
+    ok(!!dir, 'the panel offers a directions link', dir?.text ?? 'missing')
+    if (dir) {
+      const m = /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=(-?[\d.]+),(-?[\d.]+)$/
+        .exec(dir.href ?? '')
+      ok(!!m, 'it is a Google Maps directions URL with coordinates', dir.href ?? '')
+      if (m) {
+        const [lat, lon] = [+m[1], +m[2]]
+        const p = campus.pois.find((p) => p.name === PLACE.name)
+        ok(Math.abs(lat - p.lat) < 1e-5 && Math.abs(lon - p.lon) < 1e-5,
+           'pointing at this place, not another', `${lat},${lon} vs ${p.lat},${p.lon}`)
       }
+      ok(dir.target === '_blank' && /noopener/.test(dir.rel ?? ''),
+         'and opens in a new tab safely', `target=${dir.target} rel=${dir.rel}`)
     }
+
+    // Nothing may still be trying to route on the page itself.
+    const legacy = await page.evaluate(() => ({
+      badge: !!document.getElementById('route-badge'),
+      layer: !!window.__map?.getLayer('route-line'),
+    }))
+    ok(!legacy.badge && !legacy.layer, 'no in-page routing left behind',
+       `badge=${legacy.badge} layer=${legacy.layer}`)
 
     // Nothing on a published map may edit it. Surveying was a build-time tool.
     const editable = await page.evaluate(() => ({
@@ -330,15 +348,24 @@ async function check(name, width, height, theme) {
     await page.keyboard.press('Escape')
   }
 
-  // Without the permission already granted, the locate control must stay put:
-  // auto-triggering here would throw a permission dialog at a first-time
-  // visitor before they have even seen the map.
-  const locateIdle = await page.evaluate(() => {
-    const b = document.querySelector('.maplibregl-ctrl-geolocate')
-    return b ? !b.className.includes('geolocate-active') &&
-               !b.className.includes('geolocate-waiting') : 'missing'
-  })
-  ok(locateIdle === true, 'locate stays off when the permission is not granted', String(locateIdle))
+  // This site never asks where you are. Directions are a link to Google Maps,
+  // which asks for itself, on its own page.
+  const asksForLocation = await page.evaluate(() => ({
+    control: !!document.querySelector('.maplibregl-ctrl-geolocate'),
+    called: window.__geoCalled === true,
+  }))
+  ok(!asksForLocation.control && !asksForLocation.called,
+     'the page never asks for your location',
+     `control=${asksForLocation.control} getCurrentPosition=${asksForLocation.called}`)
+
+  // The wordmark is text now — clicking it must not open anything.
+  await page.click('#brand')
+  const afterBrandClick = await page.evaluate(() => ({
+    tag: document.getElementById('brand')?.tagName,
+    panelOpen: !document.getElementById('panel').hidden,
+  }))
+  ok(afterBrandClick.tag === 'DIV' && !afterBrandClick.panelOpen,
+     'the wordmark is inert', `<${afterBrandClick.tag?.toLowerCase()}> panel=${afterBrandClick.panelOpen}`)
 
   /* ── imagery ───────────────────────────────────────────────────────── */
 
@@ -389,50 +416,9 @@ async function check(name, width, height, theme) {
   await page.close()
 }
 
-/**
- * The other side of that: with the permission already granted, the locate
- * control should come up switched on rather than waiting to be found. Runs in
- * its own page, and last, because granting the permission moves the map — which
- * would quietly undermine every check above it.
- */
-async function checkLocateOnByDefault() {
-  console.log('\nlocation (permission already granted)')
-  const ctx = browser.defaultBrowserContext()
-  await ctx.overridePermissions(new URL(URL_).origin, ['geolocation'])
-
-  const page = await ctx.newPage()
-  await page.setViewport({ width: 1440, height: 900 })
-  // Stand in the middle of campus, so the fix is somewhere the map can show.
-  await page.setGeolocation({
-    latitude: campus.meta.center[1],
-    longitude: campus.meta.center[0],
-  })
-  await page.goto(URL_, { waitUntil: 'networkidle2', timeout: 30_000 })
-  await page.waitForFunction(
-    () => document.getElementById('boot')?.classList.contains('gone'),
-    { timeout: 20_000 },
-  ).catch(() => {})
-
-  const active = await page.waitForFunction(() => {
-    const b = document.querySelector('.maplibregl-ctrl-geolocate')
-    return !!b && /geolocate-(active|background)/.test(b.className)
-  }, { timeout: 15_000 }).then(() => true).catch(() => false)
-  const cls = await page.evaluate(() =>
-    document.querySelector('.maplibregl-ctrl-geolocate')?.className ?? 'missing')
-  ok(active, 'locate switches itself on when already permitted', cls)
-
-  const dot = await page.waitForSelector('.maplibregl-user-location-dot', { timeout: 8000 })
-    .then(() => true).catch(() => false)
-  ok(dot, 'and the position marker is on the map')
-
-  await ctx.clearPermissionOverrides()
-  await page.close()
-}
-
 await check('desktop-dark', 1440, 900, 'dark')
 await check('desktop-light', 1440, 900, 'light')
 await check('mobile-dark', 402, 874, 'dark')
-await checkLocateOnByDefault()
 
 await browser.close()
 await rm(PROFILE, { recursive: true, force: true })

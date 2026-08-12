@@ -133,7 +133,7 @@ kbd {
 }
 #bar > * { pointer-events: auto; }
 
-#brand-btn {
+#brand {
   flex: none;
   padding: 5px 2px;
   font-size: 13px;
@@ -142,8 +142,8 @@ kbd {
   color: var(--fg);
   text-shadow: 0 0 4px var(--halo), 0 0 10px var(--halo);
 }
-#brand-btn span { color: var(--fg-3); font-weight: 500; }
-#brand-btn:hover span { color: var(--accent); }
+#brand span { color: var(--fg-3); font-weight: 500; }
+#brand:hover span { color: var(--accent); }
 
 /* The one control everything else hangs off, so it gets to be the loudest
    thing on the map: wider, lifted, and the only accent-bordered surface. */
@@ -214,7 +214,7 @@ body.tagging #map canvas { cursor: crosshair; }
 /* Over a photograph, a text halo is no longer enough — the ground underneath
    is bright green, white and mid-grey all at once. Anything floating loose on
    the map gets a plate to sit on instead. */
-body.imagery #brand-btn,
+body.imagery #brand,
 body.imagery .chip,
 body.imagery .chips-empty,
 body.imagery #attrib,
@@ -224,7 +224,7 @@ body.imagery #theme-btn {
   text-shadow: none;
   opacity: 1;
 }
-body.imagery #brand-btn { padding: 5px 7px; }
+body.imagery #brand { padding: 5px 7px; }
 body.imagery .chip, body.imagery .chips-empty { padding: 3px 7px; }
 body.imagery #attrib { padding: 1px 5px; }
 body.imagery .chip .dot { box-shadow: none; }
@@ -242,12 +242,6 @@ body.imagery .chip .dot { box-shadow: none; }
   gap: 9px;
   max-width: min(560px, calc(100vw - 24px));
 }
-
-/* The dock is bottom-anchored and the route badge is centred on the same edge,
-   so a legend wide enough to reach the middle would sit under it. Lift the
-   chips clear for as long as a badge is on screen: it stands 37px tall on its
-   own --pad offset, which needs 44 to clear with a gap left over. */
-body:has(#route-badge:not([hidden])) #dock { padding-bottom: 44px; }
 
 /* Legally required, practically ignored — keep it out of the way. */
 #attrib {
@@ -343,7 +337,7 @@ body:has(#route-badge:not([hidden])) #dock { padding-bottom: 44px; }
 .kv .bad { color: var(--danger); }
 
 .p-actions { display: flex; gap: 6px; margin: 0 0 15px; }
-.p-actions button {
+.p-actions button, .p-actions a {
   flex: 1;
   padding: 7px 9px;
   background: var(--bg-2);
@@ -351,9 +345,14 @@ body:has(#route-badge:not([hidden])) #dock { padding-bottom: 44px; }
   border-radius: var(--r);
   font-size: 12px;
   color: var(--fg-2);
+  /* The primary action is a link out to Google Maps, so it has to be talked
+     out of looking like body-copy link and into looking like the button it
+     sits next to. */
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
 }
-.p-actions button:hover { color: var(--fg); border-color: var(--line-2); }
-.p-actions button.on { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.p-actions button:hover, .p-actions a:hover { color: var(--fg); border-color: var(--line-2); }
 
 .p-sec { margin: 16px 0 7px; font-size: 11px; color: var(--fg-3); }
 .p-note { font-size: 12.5px; color: var(--fg-2); line-height: 1.55; margin: 0 0 10px; }
@@ -391,7 +390,7 @@ body:has(#route-badge:not([hidden])) #dock { padding-bottom: 44px; }
 }
 .tag-form input.bad { border-color: var(--danger); }
 .tag-form .p-actions { margin-top: 16px; }
-.p-actions button.primary {
+.p-actions .primary, .p-actions .primary:hover {
   color: #fff;
   background: var(--accent);
   border-color: var(--accent);
@@ -589,31 +588,6 @@ button.linkish:hover { color: var(--danger); }
 #boot.gone { display: none; }
 #boot.err { color: var(--danger); padding: 24px; text-align: center; line-height: 1.6; }
 
-#route-badge {
-  position: fixed;
-  bottom: var(--pad);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 7;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 7px 11px;
-  background: var(--bg-1);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  font-size: 12px;
-  white-space: nowrap;
-}
-#route-badge[hidden] { display: none; }
-#route-badge .eta { font-family: var(--mono); color: var(--accent); font-weight: 600; }
-#route-badge .via { color: var(--fg-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; max-width: 30vw; }
-#route-badge .mode { display: flex; gap: 2px; }
-#route-badge .mode button { padding: 3px 8px; font-size: 11px; color: var(--fg-3); border-radius: 4px; }
-#route-badge .mode button.on { color: var(--fg); background: var(--bg-2); }
-#route-badge .x { color: var(--fg-3); padding: 0 2px; }
-#route-badge .x:hover { color: var(--fg); }
-
 /* ── mobile ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 760px), (pointer: coarse) and (max-width: 900px) {
@@ -633,7 +607,7 @@ button.linkish:hover { color: var(--danger); }
     z-index: 9;
   }
   #open-search kbd { display: none; }
-  #brand-btn { margin-right: auto; }
+  #brand { margin-right: auto; }
 
   /* The dock unstacks: the layers become a sheet of their own. */
   #dock {
@@ -773,25 +747,11 @@ button.linkish:hover { color: var(--danger); }
   .p-head h2 { font-size: 16px; }
   .p-body { padding: 0 16px 20px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
   .p-close { font-size: 22px; padding: 0 6px; }
-  .p-actions button { padding: 11px 9px; font-size: 13px; }
+  .p-actions button, .p-actions a { padding: 11px 9px; font-size: 13px; }
   .kv { grid-template-columns: 70px 1fr; }
 
   /* When the sheet is up, the search bar would sit on top of it. */
   body:has(#panel:not([hidden])) #open-search { display: none; }
-
-  /* The route badge stacks above the search bar instead of centring. */
-  #route-badge {
-    top: auto;
-    bottom: calc(var(--pad) + 58px + env(safe-area-inset-bottom));
-    left: var(--pad); right: var(--pad);
-    transform: none;
-    justify-content: space-between;
-    box-shadow: var(--lift);
-  }
-  #route-badge .via { max-width: 34vw; }
-
-  /* The detail sheet covers the route badge rather than fighting it. */
-  body:has(#panel:not([hidden])) #route-badge { display: none; }
 
   /* Palette fills the screen — a centred box is wrong on a phone. */
   #palette { padding: 0; align-items: stretch; }

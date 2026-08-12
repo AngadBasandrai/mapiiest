@@ -27,8 +27,6 @@ const PALETTE = {
     label: '#9aa4b2',
     labelHalo: '#0b0d10',
     dotStroke: '#0b0d10',
-    routeHalo: '#0b0d10',
-    route: '#58a6ff',
     focus: '#61d47c',
   },
   // Deliberately not a white map. The campus is a warm paper tone, buildings a
@@ -51,8 +49,6 @@ const PALETTE = {
     label: '#4a5058',
     labelHalo: '#f4f2ee',
     dotStroke: '#fdfdfc',
-    routeHalo: '#fdfdfc',
-    route: '#2b6cb8',
     focus: '#2a8a4d',
   },
 } as const
@@ -109,7 +105,6 @@ export function buildStyle(
       paths: src(geo.paths!),
       buildings: src(geo.buildings!),
       pois: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-      route: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': C.bg } },
@@ -200,17 +195,6 @@ export function buildStyle(
         id: 'building-cat', type: 'fill', source: 'buildings',
         filter: ['all', ['!=', ['get', 'cat'], ''], ['in', ['get', 'cat'], ['literal', []]]],
         paint: { 'fill-color': catColour(campus), 'fill-opacity': 0.16 },
-      },
-
-      {
-        id: 'route-halo', type: 'line', source: 'route',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': C.routeHalo, 'line-width': 9, 'line-opacity': 0.9 },
-      },
-      {
-        id: 'route-line', type: 'line', source: 'route',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': C.route, 'line-width': 4 },
       },
 
       {

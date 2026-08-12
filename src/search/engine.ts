@@ -292,13 +292,10 @@ const DEV_ACTIONS: Action[] = [
 ]
 
 const ACTIONS: Action[] = [
-  { id: 'locate', title: 'Find my location', sub: 'Centre the map on you', words: 'gps where am i me here' },
   // "google" and "google maps" are in here on purpose: it is what people type
   // when they mean "show me the actual photo of this place".
   { id: 'imagery', title: 'Satellite imagery', sub: 'Aerial photo under the map', words: 'satellite aerial imagery photo google maps earth view real' },
   { id: 'layers-all', title: 'Show every layer', sub: 'Turn all categories on', words: 'all layers everything show' },
   { id: 'layers-none', title: 'Hide every layer', sub: 'Clear the map', words: 'none clear hide reset layers' },
-  { id: 'clear-route', title: 'Clear route', sub: 'Remove the drawn path', words: 'route clear cancel remove path' },
-  { id: 'about', title: 'About & data sources', sub: 'Where every number comes from', words: 'about data source credit osm attribution help' },
   ...(import.meta.env.DEV ? DEV_ACTIONS : []),
 ]

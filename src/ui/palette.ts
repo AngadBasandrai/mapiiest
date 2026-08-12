@@ -20,7 +20,6 @@ export interface PaletteHost {
   index: SearchIndex
   campus: Campus
   open(hit: Hit): void
-  routeTo(hit: Hit): void
 }
 
 let host: PaletteHost
@@ -59,7 +58,7 @@ export function initPalette(h: PaletteHost) {
     const row = (e.target as HTMLElement).closest('.row') as HTMLElement | null
     if (!row) return
     cursor = +row.dataset.i!
-    commit(false)
+    commit()
   })
 
   list.addEventListener('mousemove', (e) => {
@@ -100,8 +99,7 @@ function onKey(e: KeyboardEvent) {
     case 'ArrowUp': e.preventDefault(); move(-1); break
     case 'Home': if (hits.length) { e.preventDefault(); cursor = 0; paintCursor() } break
     case 'End': if (hits.length) { e.preventDefault(); cursor = hits.length - 1; paintCursor() } break
-    case 'Enter': e.preventDefault(); commit(false); break
-    case 'Tab': e.preventDefault(); commit(true); break
+    case 'Enter': e.preventDefault(); commit(); break
     case 'n': if (e.ctrlKey) { e.preventDefault(); move(1) } break
     case 'p': if (e.ctrlKey) { e.preventDefault(); move(-1) } break
   }
@@ -113,10 +111,9 @@ function move(d: number) {
   paintCursor()
 }
 
-function commit(route: boolean) {
+function commit() {
   const hit = hits[cursor]
   if (!hit) return
-  if (route && hit.lat != null) { host.routeTo(hit); closePalette(); return }
   host.open(hit)
   if (hit.kind !== 'layer') closePalette()
 }

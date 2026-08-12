@@ -48,21 +48,3 @@ export interface Campus {
   pois: Poi[]
   places?: { items: Poi[] }
 }
-
-export interface Graph {
-  lat: number[]
-  lon: number[]
-  /** [a, b, metres, footSeconds, bikeSeconds, flags] */
-  edges: [number, number, number, number, number, number][]
-}
-
-export type Profile = 'foot' | 'bike'
-
-export interface Route {
-  coords: [number, number][]
-  seconds: number
-  metres: number
-  steps: boolean
-  indoor: boolean
-  unpaved: boolean
-}
