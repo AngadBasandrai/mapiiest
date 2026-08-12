@@ -227,30 +227,44 @@ Nothing depends on them.
 
 ### Custom domain
 
-To serve this from a subdomain of a domain you own — say `maps.example.in`:
+To serve this from `maps.grafitelab.in` instead. **Order matters** — the DNS
+record has to exist before the repo switches over, or the site spends the gap
+building for the wrong path.
 
-1. **DNS**, at whoever hosts the zone: add a `CNAME` record with host `maps`
-   pointing at `angadbasandrai.github.io.` — the *user* domain, with no repo
-   path. A CNAME record cannot contain a path; GitHub works out which
-   repository to serve from the `CNAME` file in the deployed site.
-2. **Repo**: create `public/CNAME` containing the bare hostname
-   (`maps.example.in`, no scheme, no trailing slash), and set the same value in
-   Settings → Pages → Custom domain.
-3. **Base path**: a custom domain serves from its own root, so the repo name has
-   to drop out of every asset URL. The workflow already does this — it switches
-   `BASE_PATH` to `/` the moment `public/CNAME` exists, so step 2 is the whole
+1. **DNS first**, in Hostinger's hPanel (that zone runs on `dns-parking.com`
+   nameservers): Domains → grafitelab.in → DNS / Nameservers → add
+
+   | Type | Name | Points to | TTL |
+   | --- | --- | --- | --- |
+   | `CNAME` | `maps` | `angadbasandrai.github.io` | default |
+
+   Note the target is the *user* domain with **no repo path** — a CNAME record
+   cannot carry one. GitHub works out which repository to serve from the
+   hostname it receives. Wait for `nslookup maps.grafitelab.in 8.8.8.8` to
+   answer before going on; it is usually minutes.
+
+2. **Then the repo**: create `public/CNAME` containing exactly
+   `maps.grafitelab.in` — bare hostname, no scheme, no trailing slash — and set
+   the same value in Settings → Pages → Custom domain. Commit and push.
+
+3. **Base path** takes care of itself. A custom domain serves from its own root,
+   so the repo name has to vanish from every asset URL; the workflow switches
+   `BASE_PATH` to `/` the moment `public/CNAME` exists. Step 2 is the whole
    change.
-4. **HTTPS**: GitHub issues a Let's Encrypt certificate once the DNS resolves —
+
+4. **HTTPS**: GitHub issues a Let's Encrypt certificate once DNS resolves —
    usually minutes, occasionally up to a day. Then tick **Enforce HTTPS**.
 
-Two things that commonly go wrong. If the zone is on Cloudflare, leave the
-record **DNS only** (grey cloud) until the certificate is issued; a proxied
-record makes GitHub's validation fail. And verifying the domain at the account
-level (Settings → Pages → Verify domain, a `TXT` record) is worth doing — it
-stops anyone else pointing their Pages site at your subdomain later.
+`grafitelab.in` itself already points at GitHub Pages (185.199.108–111.153) for
+a different repo. That is fine and does not conflict: one custom domain per
+repository, and a subdomain is independent of the apex.
 
-Once a custom domain is live, `angadbasandrai.github.io/mapiiest/` redirects to
-it, so old links keep working.
+Verifying the domain at the account level (Settings → Pages → Verify domain, a
+`TXT` record) stops anyone else pointing their Pages site at your subdomain
+later — worth doing once, and it may already be done for this zone.
+
+Once the custom domain is live, `angadbasandrai.github.io/mapiiest/` redirects
+to it, so existing links keep working.
 
 ## Configuration
 
