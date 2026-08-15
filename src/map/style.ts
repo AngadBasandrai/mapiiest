@@ -57,12 +57,12 @@ const PALETTE = {
 export const FONT = 'Noto Sans Regular'
 
 /**
- * Aerial imagery, off by default.
+ * Aerial imagery, on by default.
  *
- * This is the one thing on the page that fetches from somewhere else, and it
- * only does so once you turn it on. Esri's World Imagery is the layer OSM's own
- * iD editor ships for tracing, which is exactly what it is here for: seeing the
- * buildings and paths that nobody has mapped yet.
+ * This is the one thing on the page that fetches from somewhere else. It leads
+ * because OpenStreetMap has too few building footprints here for the drawn map
+ * to stand on its own — over the photograph every pin sits on the thing it
+ * names, and the gap between what exists and what is mapped is plain.
  *
  * Google's tiles are deliberately not an option — their terms require an API
  * key with billing attached and do not permit serving their imagery underneath

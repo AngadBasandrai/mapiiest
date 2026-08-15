@@ -29,13 +29,20 @@ npm test           # typecheck + rebuild + smoke test
 
 ## Imagery
 
-The photo button in the top bar drops Esri's World Imagery under the map and
-thins the flat fills so it shows through. It is off by default and it is the
-**only** request this site ever makes to anywhere else.
+Esri's World Imagery sits under the map, and it is **on by default**: OSM has 38
+building footprints inside the wall against a campus full of them, so the drawn
+map alone is mostly empty ground with 134 pins floating over it. On the
+photograph every pin sits on the thing it names. The photo button in the top bar
+switches it off and gives the drawn map back, tinted footprints and all.
 
-That layer is the same one OpenStreetMap's own iD editor uses for tracing, which
-is precisely what it is for here: turn it on and the gap between what exists and
-what is mapped is obvious at a glance.
+Those tiles are the **only** request this site makes to anywhere else — and
+because the layer is on by default, that request now happens on every load
+rather than on demand. Everything else is served from this origin.
+
+Labels get their own treatment over the photo: the theme's grey-on-pale pairing
+is tuned for a flat surface of known lightness, and a photo is bright green,
+white roof and dark shadow inside a single word, so both themes switch to white
+on a dark halo while imagery is on.
 
 Google's tiles are deliberately not an option. Serving them requires a Maps
 Platform key with billing attached, and their terms do not permit using Google
