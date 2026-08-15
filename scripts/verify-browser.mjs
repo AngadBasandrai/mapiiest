@@ -370,41 +370,52 @@ async function check(name, width, height, theme) {
   /* ── imagery ───────────────────────────────────────────────────────── */
 
   await page.keyboard.press('Escape')
-  await page.click('#imagery-btn')
-  const img = await page.evaluate(() => ({
+
+  // On by default: OSM has too few building footprints for the drawn map to
+  // stand on its own, so the photograph is the ground and the pins sit on it.
+  const initial = await page.evaluate(() => ({
     pressed: document.getElementById('imagery-btn').getAttribute('aria-pressed'),
     visible: window.__map?.getLayoutProperty('imagery', 'visibility'),
-    // The flat ground has to get out of the way, or the photo is invisible
-    // underneath it and the toggle looks broken.
     campusFill: window.__map?.getPaintProperty('campus', 'fill-opacity'),
     credit: !document.getElementById('imagery-credit').hidden,
     tint: window.__map?.getLayoutProperty('building-cat', 'visibility'),
+    label: window.__map?.getPaintProperty('poi-label', 'text-color'),
+    plate: document.body.classList.contains('imagery'),
   }))
-  ok(img.pressed === 'true' && img.visible === 'visible', 'imagery layer switches on', img.visible)
-  ok(img.campusFill === 0, 'ground fills step aside for the photo', `campus fill-opacity ${img.campusFill}`)
-  ok(img.credit, 'imagery attribution appears with it')
-  ok(img.tint === 'none', 'the building category tint is hidden over the photo', `visibility ${img.tint}`)
+  ok(initial.pressed === 'true' && initial.visible === 'visible',
+     'imagery is on from the start', initial.visible)
+  ok(initial.campusFill === 0, 'ground fills step aside for the photo', `campus fill-opacity ${initial.campusFill}`)
+  ok(initial.credit, 'imagery attribution is shown')
+  ok(initial.tint === 'none', 'the building category tint is hidden over the photo', `visibility ${initial.tint}`)
+  ok(initial.plate, 'map chrome takes its plate backing over the photo')
+  // The theme's grey-on-pale labels wash out over a photograph; white on a dark
+  // halo is what keeps them readable, in both themes.
+  ok(initial.label === '#ffffff', 'labels switch to the over-photo treatment', String(initial.label))
 
   if (SHOTS) {
-    // Tiles are a network round trip; screenshotting before they land produces
-    // a black rectangle that looks like a broken layer.
-    // `isSourceLoaded` goes true during a lull with nothing in flight, well
-    // before the visible tiles are actually decoded, so settle after it too.
     await page.waitForFunction(() => window.__map?.isSourceLoaded('imagery'), { timeout: 15_000 })
       .catch(() => {})
     await new Promise((r) => setTimeout(r, 2500))
     await page.screenshot({ path: join(ROOT, `.verify/${name}-imagery.png`) })
   }
 
+  // Off gives the drawn map back, tint and all.
   await page.click('#imagery-btn')
   const off = await page.evaluate(() => ({
     visible: window.__map?.getLayoutProperty('imagery', 'visibility'),
     campusFill: window.__map?.getPaintProperty('campus', 'fill-opacity'),
     credit: document.getElementById('imagery-credit').hidden,
     tint: window.__map?.getLayoutProperty('building-cat', 'visibility'),
+    label: window.__map?.getPaintProperty('poi-label', 'text-color'),
   }))
-  ok(off.visible === 'none' && off.campusFill === 1 && off.credit, 'and back off cleanly')
-  ok(off.tint === 'visible', 'and the building tint comes back with the drawn map', `visibility ${off.tint}`)
+  ok(off.visible === 'none' && off.campusFill === 1 && off.credit, 'switching it off restores the drawn map')
+  ok(off.tint === 'visible', 'and the building tint comes back with it', `visibility ${off.tint}`)
+  ok(off.label !== '#ffffff', 'and labels return to the theme colour', String(off.label))
+
+  // And back on again, so the toggle is proven in both directions.
+  await page.click('#imagery-btn')
+  const again = await page.evaluate(() => window.__map?.getLayoutProperty('imagery', 'visibility'))
+  ok(again === 'visible', 'and back on again', String(again))
 
   if (SHOTS) {
     await page.keyboard.press('Escape')

@@ -64,6 +64,51 @@ ok(geo.roads.features.length + geo.paths.features.length > 10,
 ok(geo.boundary.features.length === 1, 'campus boundary drawn')
 ok(Array.isArray(campus.meta.bbox) && campus.meta.bbox.length === 2, 'campus bbox present for framing')
 
+/* ── palette ─────────────────────────────────────────────────────────────── */
+
+// 25 categories is past what colour alone can carry, so the palette was solved
+// as a maximin problem rather than picked by eye. These assertions are what
+// stop it drifting back: the previous palette had `mess` and `canteen` on the
+// same hex, which no amount of looking at the map made obvious.
+console.log('\npalette')
+{
+  const s2lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+  const lin = (h) => [0, 2, 4].map((i) => s2lin(parseInt(h.slice(1 + i, 3 + i), 16) / 255))
+  const oklab = (h) => {
+    const [r, g, b] = lin(h)
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+    const q = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+    return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * q,
+            1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * q,
+            0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * q]
+  }
+  const dE = (x, y) => {
+    const a = oklab(x), b = oklab(y)
+    return 100 * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+  }
+  // How the app derives the light theme: each channel scaled by 0.62.
+  const dim = (h) => '#' + [0, 2, 4]
+    .map((i) => Math.round(parseInt(h.slice(1 + i, 3 + i), 16) * 0.62).toString(16).padStart(2, '0')).join('')
+
+  const cats = Object.entries(campus.categories)
+  const colors = cats.map(([, v]) => v.color)
+  ok(colors.every((c) => /^#[0-9a-f]{6}$/i.test(c)), `${colors.length} category colours are valid hex`)
+
+  const dupes = colors.filter((c, i) => colors.indexOf(c) !== i)
+  ok(dupes.length === 0, 'no two categories share a colour', [...new Set(dupes)].join(', '))
+
+  for (const [label, xform, floor] of [['dark', (x) => x, 12], ['light', dim, 8.5]]) {
+    let worst = Infinity, pair = ''
+    for (let i = 0; i < cats.length; i++)
+      for (let j = i + 1; j < cats.length; j++) {
+        const d = dE(xform(cats[i][1].color), xform(cats[j][1].color))
+        if (d < worst) { worst = d; pair = `${cats[i][0]}/${cats[j][0]}` }
+      }
+    ok(worst >= floor, `${label}: closest pair ΔE ${worst.toFixed(1)} (${pair}), floor ${floor}`)
+  }
+}
+
 /* ── search ──────────────────────────────────────────────────────────────── */
 
 console.log('\nsearch')

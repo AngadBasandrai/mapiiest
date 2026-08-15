@@ -13,9 +13,15 @@
   --fg: #e6edf3;
   --fg-2: #98a1ae;
   --fg-3: #656e7b;
-  --accent: #61d47c;
+  --accent: #58a6ff;
+  /* Text on a filled accent surface. The bright blue is too light to carry
+     white, so the filled button flips to near-black ink instead. */
+  --accent-ink: #04121f;
   --danger: #ff7b72;
-  --route: #58a6ff;
+  /* Open/closed is a status, not the brand — it stays green and red even though
+     the accent is blue, or the badge starts meaning nothing. */
+  --ok: #3fb950;
+  --route: #79c0ff;
   --scrim: rgba(6, 8, 10, .58);
   --lift: 0 16px 44px rgba(0, 0, 0, .55);
   --halo: var(--bg);
@@ -45,9 +51,11 @@
     --fg: #2b313a;
     --fg-2: #626b78;
     --fg-3: #949ba7;
-    --accent: #2a8a4d;
+    --accent: #1f6feb;
+    --accent-ink: #ffffff;
     --danger: #b8443a;
-    --route: #2b6cb8;
+    --ok: #1a7f37;
+    --route: #0969da;
     --scrim: rgba(88, 98, 112, .26);
     --lift: 0 14px 36px rgba(40, 50, 70, .13);
     --halo: #fbfbfc;
@@ -62,9 +70,11 @@
   --fg: #2b313a;
   --fg-2: #626b78;
   --fg-3: #949ba7;
-  --accent: #2a8a4d;
+  --accent: #1f6feb;
+  --accent-ink: #ffffff;
   --danger: #b8443a;
-  --route: #2b6cb8;
+  --ok: #1a7f37;
+  --route: #0969da;
   --scrim: rgba(88, 98, 112, .26);
   --lift: 0 14px 36px rgba(40, 50, 70, .13);
   --halo: #fbfbfc;
@@ -333,7 +343,7 @@ body.imagery .chip .dot { box-shadow: none; }
 .kv dd { margin: 0; color: var(--fg); overflow-wrap: anywhere; }
 .kv a { color: var(--route); text-decoration: none; }
 .kv a:hover { text-decoration: underline; }
-.kv .ok { color: var(--accent); }
+.kv .ok { color: var(--ok); }
 .kv .bad { color: var(--danger); }
 
 .p-actions { display: flex; gap: 6px; margin: 0 0 15px; }
@@ -391,7 +401,7 @@ body.imagery .chip .dot { box-shadow: none; }
 .tag-form input.bad { border-color: var(--danger); }
 .tag-form .p-actions { margin-top: 16px; }
 .p-actions .primary, .p-actions .primary:hover {
-  color: #fff;
+  color: var(--accent-ink);
   background: var(--accent);
   border-color: var(--accent);
   font-weight: 600;
@@ -533,7 +543,7 @@ button.linkish:hover { color: var(--danger); }
   text-overflow: ellipsis;
 }
 .row-meta { font-family: var(--mono); font-size: 10px; color: var(--fg-3); flex: none; }
-.row-meta .open { color: var(--accent); }
+.row-meta .open { color: var(--ok); }
 .row-meta .shut { color: var(--danger); }
 
 #palette-foot {
@@ -707,6 +717,16 @@ button.linkish:hover { color: var(--danger); }
   }
   .chip[aria-pressed="true"] { opacity: 1; }
   .chip .dot { width: 9px; height: 9px; box-shadow: none; opacity: 1; }
+
+  /* In the sheet a chip already sits on the sheet's own surface, so the plate
+     the imagery mode gives it over the map is not wanted — and its tighter
+     padding out-specifies the row padding above, shrinking a 40px tap target
+     to 24px. */
+  body.imagery #layer-chips .chip,
+  body.imagery #layer-chips .chips-empty {
+    padding: 11px 8px;
+    background: none;
+  }
   .chip .n {
     display: inline;
     margin-left: auto;

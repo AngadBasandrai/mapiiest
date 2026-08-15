@@ -263,23 +263,31 @@ async function start() {
 
   /* ── imagery ──────────────────────────────────────────────────────────── */
 
-  // Aerial imagery is the honest answer to "why is half the campus missing":
-  // it is not mapped in OpenStreetMap yet.
-  let imagery = false
+  // On by default. OpenStreetMap has 38 building footprints inside the wall
+  // against a campus full of them, so the drawn map alone is mostly empty
+  // ground with pins floating on it; over the photograph every pin sits on the
+  // building it names. Switching it off gives the drawn map back.
+  let imagery = true
 
   const imgBtn = document.getElementById('imagery-btn')!
   const credit = document.getElementById('imagery-credit')!
 
-  function setImagery(on: boolean) {
-    imagery = on
-    applyImagery(map, on)
+  function setImageryChrome(on: boolean) {
     document.body.classList.toggle('imagery', on)
     imgBtn.setAttribute('aria-pressed', String(on))
     imgBtn.title = on ? 'Aerial imagery on' : 'Aerial imagery off'
     credit.hidden = !on
   }
+
+  function setImagery(on: boolean) {
+    imagery = on
+    applyImagery(map, on, resolved())
+    setImageryChrome(on)
+  }
   credit.innerHTML = `· <a href="${IMAGERY.creditUrl}" target="_blank" rel="noopener">imagery ${IMAGERY.credit}</a>`
-  credit.hidden = true
+  // Everything but the map layer itself can be set now; the layer has to wait
+  // for the style, which is why `map.on('load')` calls this again.
+  setImageryChrome(imagery)
   imgBtn.addEventListener('click', () => setImagery(!imagery))
 
   /* ── surveying (development only) ─────────────────────────────────────── */
@@ -397,7 +405,7 @@ async function start() {
     // be refilled once the new style is live.
     map.setStyle(buildStyle(geo, campus, t, base))
     map.once('styledata', () => {
-      applyImagery(map, imagery)
+      applyImagery(map, imagery, t)
       refreshPois()
     })
   })
@@ -423,6 +431,8 @@ async function start() {
 
   map.on('load', () => {
     clearTimeout(bootTimer)
+    // The imagery layer only exists once the style is up.
+    applyImagery(map, imagery, resolved())
     refreshPois()
     boot.classList.add('gone')
     // Deep link: ?q=… opens the palette pre-filled, ?id=… focuses a place.

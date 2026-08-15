@@ -26,33 +26,49 @@ const warn = (m) => warnings.push(m)
 /* ── categories ─────────────────────────────────────────────────────────── */
 // Every POI lands in exactly one category. Order matters: first match wins.
 // `pin` = drawn as a labelled marker; others are drawn only when their layer is on.
+//
+// The colours are not hand-picked. 25 categories is far past the ~8 a
+// categorical palette carries by hue alone, so they were solved as a maximin
+// problem — spread as far apart as 25 colours can be — scoring the worse of the
+// two themes, since the app derives its light colour by dimming this one. The
+// result separates the closest pair by ΔE 12.9 (OKLab ×100) on the dark ground
+// and 9.1 on paper, against 0 before: `mess` and `canteen` were the same hex.
+//
+// What it cannot do is survive colour blindness: no set of 25 colours can, and
+// the closest protan/deutan pair here is ~0. Identity never rests on colour
+// alone — pinned places carry their name on the map, the legend chip names its
+// category, and clicking a dot opens its name.
+//
+// Assignment is semantic where the hue allows it: lakes blue, parks green,
+// health red, quarters brown. Parks and sports take the two closest greens on
+// purpose — they are the pair it costs least to confuse.
 
 export const CATEGORIES = {
-  lecture:  { label: 'Lecture halls', color: '#ffb454', pin: true },
-  academic: { label: 'Depts & labs',  color: '#8ab4f8', pin: true },
-  hostel:   { label: 'Halls & hostels', color: '#c792ea', pin: true },
-  library:  { label: 'Libraries',     color: '#ffa657', pin: true },
-  mess:     { label: 'Messes',        color: '#7ee787', pin: true },
-  canteen:  { label: 'Canteens',      color: '#7ee787', pin: true },
-  landmark: { label: 'Landmarks',     color: '#ffd166', pin: true },
-  lake:     { label: 'Lakes & ponds', color: '#3fa7d6', pin: true },
-  activity: { label: 'Clubs & activities', color: '#ff7ac8', pin: true },
-  shop:     { label: 'Shops',         color: '#a5d6ff', pin: false },
-  print:    { label: 'Printing',      color: '#f0883e', pin: false },
-  water:    { label: 'Water coolers', color: '#56d4dd', pin: false },
-  atm:      { label: 'ATMs & banks',  color: '#ffdd57', pin: false },
-  cycle:    { label: 'Cycle parking', color: '#79c0ff', pin: false },
-  laundry:  { label: 'Laundry',       color: '#d2a8ff', pin: false },
-  health:   { label: 'Health',        color: '#ff7b72', pin: false },
-  sports:   { label: 'Sports',        color: '#3fb950', pin: false },
-  toilet:   { label: 'Toilets',       color: '#8b949e', pin: false },
-  vending:  { label: 'Vending',       color: '#e3b341', pin: false },
-  worship:  { label: 'Worship',       color: '#bc8cff', pin: false },
-  transport:{ label: 'Transport',     color: '#ff9bce', pin: false },
-  admin:    { label: 'Admin & help',  color: '#9ea7b3', pin: false },
-  quarters: { label: 'Staff quarters',color: '#a1887f', pin: false },
-  abandoned:{ label: 'Abandoned',     color: '#8b8378', pin: false },
-  green:    { label: 'Parks',         color: '#2ea043', pin: false },
+  lecture:  { label: 'Lecture halls', color: '#f4993c', pin: true },
+  academic: { label: 'Depts & labs',  color: '#2852f0', pin: true },
+  hostel:   { label: 'Halls & hostels', color: '#a127fc', pin: true },
+  library:  { label: 'Libraries',     color: '#e05f00', pin: true },
+  mess:     { label: 'Messes',        color: '#4aff6b', pin: true },
+  canteen:  { label: 'Canteens',      color: '#04cfa2', pin: true },
+  landmark: { label: 'Landmarks',     color: '#f1d2ad', pin: true },
+  lake:     { label: 'Lakes & ponds', color: '#0cc1fd', pin: true },
+  activity: { label: 'Clubs & activities', color: '#fa256a', pin: true },
+  shop:     { label: 'Shops',         color: '#7e79f5', pin: false },
+  print:    { label: 'Printing',      color: '#e364db', pin: false },
+  water:    { label: 'Water coolers', color: '#64f0f4', pin: false },
+  atm:      { label: 'ATMs & banks',  color: '#ecdc21', pin: false },
+  cycle:    { label: 'Cycle parking', color: '#157e2c', pin: false },
+  laundry:  { label: 'Laundry',       color: '#e0adfb', pin: false },
+  health:   { label: 'Health',        color: '#c50031', pin: false },
+  sports:   { label: 'Sports',        color: '#9ac321', pin: false },
+  toilet:   { label: 'Toilets',       color: '#559d7b', pin: false },
+  vending:  { label: 'Vending',       color: '#cd1aa5', pin: false },
+  worship:  { label: 'Worship',       color: '#7e539c', pin: false },
+  transport:{ label: 'Transport',     color: '#ff85a2', pin: false },
+  admin:    { label: 'Admin & help',  color: '#1d7390', pin: false },
+  quarters: { label: 'Staff quarters',color: '#896027', pin: false },
+  abandoned:{ label: 'Abandoned',     color: '#a696bd', pin: false },
+  green:    { label: 'Parks',         color: '#1da90f', pin: false },
 }
 
 function classify(t) {

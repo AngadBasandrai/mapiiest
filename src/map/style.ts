@@ -27,7 +27,7 @@ const PALETTE = {
     label: '#9aa4b2',
     labelHalo: '#0b0d10',
     dotStroke: '#0b0d10',
-    focus: '#61d47c',
+    focus: '#58a6ff',
   },
   // Deliberately not a white map. The campus is a warm paper tone, buildings a
   // half-step darker, and roads the only near-white — so the built area reads
@@ -49,7 +49,7 @@ const PALETTE = {
     label: '#4a5058',
     labelHalo: '#f4f2ee',
     dotStroke: '#fdfdfc',
-    focus: '#2a8a4d',
+    focus: '#1f6feb',
   },
 } as const
 
@@ -252,9 +252,21 @@ export function buildStyle(
  * frame instead of a full style reload — but it must be re-applied after every
  * `setStyle`, since that throws the whole thing away.
  */
-export function applyImagery(map: maplibregl.Map, on: boolean) {
+export function applyImagery(map: maplibregl.Map, on: boolean, theme: 'light' | 'dark' = 'dark') {
   if (!map.getLayer('imagery')) return
+  const C = PALETTE[theme]
   map.setLayoutProperty('imagery', 'visibility', on ? 'visible' : 'none')
+
+  // Labels need their own treatment over a photograph. The theme's grey-on-pale
+  // pairing is tuned for a flat ground of known lightness; a photo is bright
+  // green, white roof and dark shadow within one word, and the light theme's
+  // labels wash out over it. White on a dark halo is the cartographic answer
+  // and reads on both themes, so over imagery both use it.
+  if (map.getLayer('poi-label')) {
+    map.setPaintProperty('poi-label', 'text-color', on ? '#ffffff' : C.label)
+    map.setPaintProperty('poi-label', 'text-halo-color', on ? 'rgba(0,0,0,0.85)' : C.labelHalo)
+    map.setPaintProperty('poi-label', 'text-halo-width', on ? 1.7 : 1.4)
+  }
 
   // The category tint on building footprints is drawn from OSM building names,
   // which are not the surveyed list this map runs on — over a photograph it is
