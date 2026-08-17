@@ -221,6 +221,88 @@ kbd {
 /* Tag mode: the whole map becomes a target, so say so. */
 body.tagging #map canvas { cursor: crosshair; }
 
+/* ── the surveying toolbar ───────────────────────────────────────────── */
+
+#tag-bar {
+  position: fixed;
+  left: 50%;
+  bottom: var(--pad);
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  box-shadow: var(--lift);
+  font-size: 12px;
+  white-space: nowrap;
+}
+#tag-bar[hidden] { display: none; }
+#tag-bar .tools { display: flex; gap: 2px; }
+#tag-bar .tools button {
+  padding: 4px 10px;
+  border-radius: 4px;
+  color: var(--fg-3);
+  font-size: 12px;
+}
+#tag-bar .tools button.on { color: var(--accent-ink); background: var(--accent); font-weight: 600; }
+#tag-bar .say { color: var(--fg-3); }
+#tag-bar > button {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--fg-2);
+  font-size: 12px;
+}
+#tag-bar > button:hover { color: var(--fg); border-color: var(--line-2); }
+#tag-bar > button.primary {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+#tag-bar > button[disabled] { opacity: .45; cursor: default; }
+#tag-bar > button.x { border: none; padding: 0 4px; font-size: 16px; color: var(--fg-3); }
+
+/* On a phone the thumb search bar owns the bottom, so the toolbar sits above it
+   and spans the width — the buttons need to be tappable, not tidy. */
+@media (max-width: 760px) {
+  #tag-bar {
+    left: var(--pad);
+    right: var(--pad);
+    transform: none;
+    bottom: calc(var(--pad) + 58px + env(safe-area-inset-bottom));
+    justify-content: space-between;
+    gap: 6px;
+  }
+  #tag-bar .say { display: none; }
+  #tag-bar .tools button, #tag-bar > button { padding: 8px 12px; }
+}
+body:has(#tag-bar:not([hidden])) #open-search { display: none; }
+
+/* ── the tint scheme in the tag form ─────────────────────────────────── */
+
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatch {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--line-2);
+  padding: 0;
+}
+.swatch.on {
+  border-color: var(--bg-1);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+#tag-tint-row[hidden] { display: none; }
+#tag-tint-row label { display: block; margin: 12px 0 5px; font-size: 11px; color: var(--fg-3); }
+
+.tag-row .linkish { padding: 0 6px; font-size: 11px; text-decoration: none; color: var(--route); }
+.tag-row .linkish:hover { text-decoration: underline; color: var(--route); }
+
 /* Over a photograph, a text halo is no longer enough — the ground underneath
    is bright green, white and mid-grey all at once. Anything floating loose on
    the map gets a plate to sit on instead. */

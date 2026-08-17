@@ -44,6 +44,10 @@ const warn = (m) => warnings.push(m)
 // purpose — they are the pair it costs least to confuse.
 
 export const CATEGORIES = {
+  // Buildings are containers: departments, offices and labs sit inside one.
+  // They draw as an outlined area with no dot and no label — the places inside
+  // carry the names, and a building's own name on top of them would be noise.
+  building: { label: 'Buildings',     color: '#adb78c', pin: false, area: true },
   lecture:  { label: 'Lecture halls', color: '#f4993c', pin: true },
   academic: { label: 'Depts & labs',  color: '#2852f0', pin: true },
   hostel:   { label: 'Halls & hostels', color: '#a127fc', pin: true },
@@ -377,7 +381,38 @@ async function main() {
   // Two ways to place one: `lat`/`lon` from an actual survey, or an `anchor`
   // naming an existing OSM feature to sit beside.
   let curatedCount = 0
-  for (const p of curated.places?.items ?? []) {
+  /**
+   * An outline, if the row carries one: at least three [lon, lat] pairs, every
+   * one inside the wall. A ring that wanders off campus is a survey mistake
+   * worth naming rather than a shape worth drawing.
+   */
+  function outline(p) {
+    if (!Array.isArray(p.poly) || p.poly.length < 3) {
+      if (p.poly) warn(`curated "${p.id}" has an outline with fewer than 3 points`)
+      return null
+    }
+    const pts = p.poly
+      .filter((c) => Array.isArray(c) && c.length === 2 && c.every(Number.isFinite))
+      .map(([lon, lat]) => [+(+lon).toFixed(6), +(+lat).toFixed(6)])
+    if (pts.length !== p.poly.length) { warn(`curated "${p.id}" has a malformed outline point`); return null }
+    const stray = pts.filter(([lon, lat]) => !inCampus(lon, lat)).length
+    if (stray) warn(`curated "${p.id}" has ${stray} outline point(s) outside the campus boundary`)
+    // Closed for GeoJSON's sake; the editor stores it open.
+    const first = pts[0], last = pts[pts.length - 1]
+    if (first[0] !== last[0] || first[1] !== last[1]) pts.push([...first])
+    return pts
+  }
+
+  for (let p of curated.places?.items ?? []) {
+    const poly = outline(p)
+    // An area drawn without a point still needs one, for search results and for
+    // the panel to have somewhere to fly to.
+    if (poly && (p.lat == null || p.lon == null)) {
+      const [lon, lat] = centroid(poly.map(([x, y]) => ({ lon: x, lat: y })))
+      p = { ...p, lat, lon }
+    }
+    if (poly) p = { ...p, poly }
+
     if (p.lat != null && p.lon != null) {
       if (!inCampus(p.lon, p.lat)) { warn(`curated "${p.id}" is outside the campus boundary`); continue }
       const { anchor, ...rest } = p

@@ -24,8 +24,10 @@ npm test           # typecheck + rebuild + smoke test
   to `maps.google.com` for that exact coordinate.
 - **Aerial imagery** under the map, on a toggle — see what is actually there.
 - **Layers** — one per category, appearing as you tag; a bottom sheet on phones.
-- **Everything beyond the wall is dimmed**, so the campus reads as the subject
-  rather than as a stripe through Howrah.
+- **Buildings are areas.** Departments, offices and labs sit inside one, so a
+  building is drawn as a tinted outline with no dot and no label — the places
+  inside it carry the names — and clicking anywhere in it opens it. Anything
+  else can carry an outline too, and keeps its dot and label on top.
 - **Light and dark**, following the system unless you say otherwise.
 - **Deep links** — `?id=w517920623` focuses a place, `?q=library` opens search.
 - **Installs, and works with no network** — see below.
@@ -56,7 +58,33 @@ MapLibre drops a failed raster tile silently — no error event, nothing in the
 console — so the page has no way to notice on its own. The worker is the only
 thing that sees the failed request, so it posts a message to the page.
 
-### How it is built
+### Surveying
+
+The button beside the search bar turns on the surveying tool, with two ways to
+mark something:
+
+- **point** — tap a spot. Tapping a place of your own opens it for editing
+  instead of stacking a second one on top.
+- **area** — tap the corners, then *finish*. Three corners minimum; *undo* drops
+  the last one.
+
+An outline defaults to the **Buildings** category, which is drawn as an area and
+nothing else. Every building shares that one category, so the category colour
+cannot tell one from the next — a scheme of eight muted tints does, picked in
+the form. They are muted on purpose: a fill sits at a fifth opacity over the
+photograph, and a saturated one buries the roof under it.
+
+Tags live in this browser's localStorage and nowhere else — there is no server,
+so what you add is yours until you export it. `My tags` in `Ctrl K` lists them
+with edit and delete, and exports the set as JSON in exactly the
+`data/curated/places.json` shape.
+
+The build validates what comes back: an outline needs at least three points,
+each a finite `[lon, lat]` pair inside the campus boundary, and it closes the
+ring for you. An area drawn without a point gets its centroid, so it still has
+somewhere for search results and the panel to fly to.
+
+## How it is built
 
 `vite.config.ts` writes `sw.js` at build time with the precache list filled in
 from what the build actually emitted. That is not tidiness: Vite hashes asset

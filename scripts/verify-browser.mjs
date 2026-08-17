@@ -335,15 +335,14 @@ async function check(name, width, height, theme) {
     ok(!legacy.badge && !legacy.layer, 'no in-page routing left behind',
        `badge=${legacy.badge} layer=${legacy.layer}`)
 
-    // Nothing on a published map may edit it. Surveying was a build-time tool.
+    // The surveying tool is part of the published site again, so the way in
+    // has to be there and the panel has to offer editing on your own places.
     const editable = await page.evaluate(() => ({
       button: !!document.getElementById('tag-btn'),
-      del: !!document.querySelector('#panel [data-tag-del]'),
       stored: localStorage.getItem('campusmap.tags.v1'),
     }))
-    ok(!editable.button, 'no tag button on the published site')
-    ok(!editable.del, 'no delete control on a place')
-    ok(editable.stored === null, 'nothing written to tag storage')
+    ok(editable.button, 'the surveying button is on the published site')
+    ok(editable.stored === null, 'nothing written to tag storage just by looking')
 
     await page.keyboard.press('Escape')
   }
@@ -367,6 +366,105 @@ async function check(name, width, height, theme) {
   ok(afterBrandClick.tag === 'DIV' && !afterBrandClick.panelOpen,
      'the wordmark is inert', `<${afterBrandClick.tag?.toLowerCase()}> panel=${afterBrandClick.panelOpen}`)
 
+  /* ── outlines ──────────────────────────────────────────────────────── */
+
+  // The whole point of a building: an area, tinted, with no dot and no label,
+  // clickable anywhere inside it. Traced here rather than assumed, because
+  // every part of that is a separate thing that can silently stop working.
+  await page.keyboard.press('Escape')
+  {
+    await page.click('#tag-btn')
+    await page.click('#tag-bar [data-tool="area"]')
+
+    const ox = Math.round(width * 0.45), oy = Math.round(height * 0.45)
+    const corners = [[0, 0], [90, 0], [90, 60], [0, 60]]
+    for (const [dx, dy] of corners) {
+      await page.mouse.click(ox + dx, oy + dy)
+      await new Promise((r) => setTimeout(r, 90))
+    }
+
+    const draft = await page.evaluate(() =>
+      window.__map.getSource('draft')._data.features.filter((f) => f.geometry.type === 'Point').length)
+    ok(draft === 4, 'tracing an outline drops a vertex per tap', `${draft} vertices`)
+
+    await page.click('#tag-bar [data-draft-done]')
+    const formUp = await page.waitForSelector('#tag-name', { timeout: 4000 })
+      .then(() => true).catch(() => false)
+    ok(formUp, 'finishing an outline opens the form')
+
+    if (formUp) {
+      const defaults = await page.evaluate(() => ({
+        cat: document.getElementById('tag-cat').value,
+        tints: !document.getElementById('tag-tint-row').hidden,
+      }))
+      ok(defaults.cat === 'building', 'an outline defaults to a building', defaults.cat)
+      ok(defaults.tints, 'and offers the colour scheme')
+
+      await page.type('#tag-name', 'Verify Block', { delay: 6 })
+      await page.click('#tag-tints [data-tint="#e0a458"]')
+      await page.click('[data-tag-save]')
+      await new Promise((r) => setTimeout(r, 700))
+
+      const drawn = await page.evaluate(() => {
+        const m = window.__map
+        const area = m.getSource('areas')._data.features.find((f) => f.properties.cat === 'building')
+        const dot = m.getSource('pois')._data.features.find((f) => f.properties.name === 'Verify Block')
+        return {
+          tint: area?.properties.color,
+          drawsDot: dot?.properties.dot,
+          pinned: dot?.properties.pin,
+          stored: JSON.parse(localStorage.getItem('campusmap.tags.v1') || '[]')[0]?.color,
+        }
+      })
+      // Stored as chosen; drawn through the same 0.62 dimming every other
+      // colour gets on the light theme, so the expected value depends on it.
+      const dimmed = '#' + [1, 3, 5].map((i) =>
+        Math.round(parseInt('#e0a458'.slice(i, i + 2), 16) * 0.62).toString(16).padStart(2, '0')).join('')
+      ok(drawn.stored === '#e0a458', 'the chosen tint is what gets stored', String(drawn.stored))
+      ok(drawn.tint === '#e0a458' || drawn.tint === dimmed,
+         'and what gets drawn, dimmed to suit the theme', String(drawn.tint))
+      ok(drawn.drawsDot === false, 'a building draws no dot')
+      ok(drawn.pinned === false, 'and no label')
+
+      // A corner, not the middle: the whole area is the target.
+      await page.keyboard.press('Escape')
+      await page.mouse.click(ox + 8, oy + 52)
+      await new Promise((r) => setTimeout(r, 600))
+      const opened = await page.evaluate(() =>
+        document.querySelector('#panel h2')?.textContent ?? '')
+      ok(opened === 'Verify Block', 'clicking anywhere inside it opens it', opened || 'nothing')
+
+      // And tapping your own place in tag mode edits rather than stacking.
+      await page.click('#tag-btn')
+      await page.click('#tag-bar [data-tool="point"]')
+      const at = await page.evaluate(() => {
+        const r = window.__map.getSource('areas')._data.features
+          .find((f) => f.properties.cat === 'building').geometry.coordinates[0]
+        const n = r.length - 1
+        const pt = window.__map.project([
+          r.slice(0, n).reduce((a, c) => a + c[0], 0) / n,
+          r.slice(0, n).reduce((a, c) => a + c[1], 0) / n,
+        ])
+        return { x: Math.round(pt.x), y: Math.round(pt.y) }
+      })
+      await page.mouse.click(at.x, at.y)
+      await page.waitForSelector('#tag-name', { timeout: 4000 }).catch(() => {})
+      const editing = await page.evaluate(() => ({
+        title: document.querySelector('#panel h2')?.textContent,
+        name: document.getElementById('tag-name')?.value,
+      }))
+      ok(editing.title === 'Edit place' && editing.name === 'Verify Block',
+         'tapping your own place edits it', `${editing.title} / ${editing.name}`)
+
+      await page.evaluate(() => localStorage.removeItem('campusmap.tags.v1'))
+      await page.keyboard.press('Escape')
+    }
+    // Leave tag mode off for whatever runs next.
+    await page.evaluate(() => {
+      if (document.body.classList.contains('tagging')) document.getElementById('tag-btn').click()
+    })
+  }
+
   /* ── imagery ───────────────────────────────────────────────────────── */
 
   await page.keyboard.press('Escape')
@@ -378,16 +476,16 @@ async function check(name, width, height, theme) {
     visible: window.__map?.getLayoutProperty('imagery', 'visibility'),
     campusFill: window.__map?.getPaintProperty('campus', 'fill-opacity'),
     credit: !document.getElementById('imagery-credit').hidden,
-    tint: window.__map?.getLayoutProperty('building-cat', 'visibility'),
     label: window.__map?.getPaintProperty('poi-label', 'text-color'),
     plate: document.body.classList.contains('imagery'),
+    areaLayers: !!window.__map?.getLayer('place-fill') && !!window.__map?.getLayer('place-line'),
   }))
   ok(initial.pressed === 'true' && initial.visible === 'visible',
      'imagery is on from the start', initial.visible)
   ok(initial.campusFill === 0, 'ground fills step aside for the photo', `campus fill-opacity ${initial.campusFill}`)
   ok(initial.credit, 'imagery attribution is shown')
-  ok(initial.tint === 'none', 'the building category tint is hidden over the photo', `visibility ${initial.tint}`)
   ok(initial.plate, 'map chrome takes its plate backing over the photo')
+  ok(initial.areaLayers, 'hand-drawn outlines have their own layers', String(initial.areaLayers))
   // The theme's grey-on-pale labels wash out over a photograph; white on a dark
   // halo is what keeps them readable, in both themes.
   ok(initial.label === '#ffffff', 'labels switch to the over-photo treatment', String(initial.label))
@@ -405,11 +503,9 @@ async function check(name, width, height, theme) {
     visible: window.__map?.getLayoutProperty('imagery', 'visibility'),
     campusFill: window.__map?.getPaintProperty('campus', 'fill-opacity'),
     credit: document.getElementById('imagery-credit').hidden,
-    tint: window.__map?.getLayoutProperty('building-cat', 'visibility'),
     label: window.__map?.getPaintProperty('poi-label', 'text-color'),
   }))
   ok(off.visible === 'none' && off.campusFill === 1 && off.credit, 'switching it off restores the drawn map')
-  ok(off.tint === 'visible', 'and the building tint comes back with it', `visibility ${off.tint}`)
   ok(off.label !== '#ffffff', 'and labels return to the theme colour', String(off.label))
 
   // And back on again, so the toggle is proven in both directions.

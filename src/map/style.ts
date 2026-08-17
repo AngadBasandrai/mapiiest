@@ -1,5 +1,4 @@
 import type { StyleSpecification } from 'maplibre-gl'
-import type { Campus } from '../types'
 
 /**
  * The whole basemap is drawn from our own GeoJSON — no tile server, no API key
@@ -28,8 +27,6 @@ const PALETTE = {
     labelHalo: '#0b0d10',
     dotStroke: '#0b0d10',
     focus: '#58a6ff',
-    outside: '#05070a',
-    outsideOpacity: 0.66,
   },
   // Deliberately not a white map. The campus is a warm paper tone, buildings a
   // half-step darker, and roads the only near-white — so the built area reads
@@ -52,10 +49,6 @@ const PALETTE = {
     labelHalo: '#f4f2ee',
     dotStroke: '#fdfdfc',
     focus: '#1f6feb',
-    // Over a photograph a pale scrim turns the surroundings to milk; a dark one
-    // reads as shade and keeps the campus the bright part in both themes.
-    outside: '#1c2430',
-    outsideOpacity: 0.5,
   },
 } as const
 
@@ -83,7 +76,6 @@ export const IMAGERY = {
 
 export function buildStyle(
   geo: Record<string, GeoJSON.FeatureCollection>,
-  campus: Campus,
   theme: 'light' | 'dark' = 'dark',
   base = '/',
   /** Phone-sized viewport: fewer, smaller labels and tighter marks. */
@@ -105,7 +97,6 @@ export function buildStyle(
         attribution: IMAGERY.credit,
       },
       boundary: src(geo.boundary!),
-      outside: src(maskOutside(geo.boundary!)),
       green: src(geo.green!),
       water: src(geo.water!),
       waterway: src(geo.waterway!),
@@ -114,6 +105,8 @@ export function buildStyle(
       paths: src(geo.paths!),
       buildings: src(geo.buildings!),
       pois: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      areas: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      draft: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': C.bg } },
@@ -195,38 +188,36 @@ export function buildStyle(
         minzoom: 16,
         paint: { 'line-color': C.buildingEdge, 'line-width': 0.7 },
       },
-      // Category tint for buildings that are themselves a POI.
-      {
-        id: 'building-cat', type: 'fill', source: 'buildings',
-        filter: ['all', ['!=', ['get', 'cat'], ''], ['in', ['get', 'cat'], ['literal', []]]],
-        paint: { 'fill-color': catColour(campus), 'fill-opacity': 0.16 },
-      },
 
-      // Everything beyond the wall, knocked back.
-      //
-      // This is what makes it read as a map *of the campus*. The campus is a
-      // wide band and a phone is tall, so fitting its width leaves half the
-      // screen showing Howrah and the Hooghly — at full contrast that reads as
-      // the subject, and the campus as a stripe through the middle. Dimming the
-      // outside costs nothing and settles which is which.
-      {
-        id: 'outside', type: 'fill', source: 'outside',
-        paint: {
-          'fill-color': C.outside,
-          // Heavier on a phone. The campus is a wide band and a portrait screen
-          // is tall, so fitting the whole of it leaves most of the screen as
-          // surroundings — the more they recede, the less that reads as clutter.
-          'fill-opacity': compact ? C.outsideOpacity + 0.12 : C.outsideOpacity,
-        },
-      },
-      // Above the mask, so the wall itself stays crisp.
       {
         id: 'campus-edge', type: 'line', source: 'boundary',
         paint: { 'line-color': C.boundary, 'line-width': 1.2, 'line-dasharray': [3, 2] },
       },
 
+      // Outlines for the places that have one. A building is only this — the
+      // departments inside it carry the names. Anything else keeps its dot and
+      // label on top, with the area underneath and the whole of it clickable.
+      {
+        id: 'place-fill', type: 'fill', source: 'areas',
+        paint: {
+          'fill-color': ['get', 'color'],
+          // Slight: enough to read as a tinted footprint on the photograph
+          // without burying the roof underneath it.
+          'fill-opacity': ['case', ['boolean', ['get', 'focus'], false], 0.42, 0.22],
+        },
+      },
+      {
+        id: 'place-line', type: 'line', source: 'areas',
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': ['case', ['boolean', ['get', 'focus'], false], 2.4, 1.2],
+          'line-opacity': 0.9,
+        },
+      },
+
       {
         id: 'poi-dot', type: 'circle', source: 'pois',
+        filter: ['==', ['get', 'dot'], true],
         paint: {
           'circle-radius': compact
             ? ['interpolate', ['linear'], ['zoom'], 13, 2, 16, 3.6, 19, 6]
@@ -272,6 +263,30 @@ export function buildStyle(
           'text-halo-width': 1.4,
         },
       },
+      // The outline being traced, over everything so it cannot be lost under a
+      // label while you are placing its corners.
+      {
+        id: 'draft-fill', type: 'fill', source: 'draft',
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': C.focus, 'fill-opacity': 0.2 },
+      },
+      {
+        id: 'draft-line', type: 'line', source: 'draft',
+        filter: ['==', ['geometry-type'], 'LineString'],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': C.focus, 'line-width': 2, 'line-dasharray': [2, 1.5] },
+      },
+      {
+        id: 'draft-vertex', type: 'circle', source: 'draft',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius': 5,
+          'circle-color': C.focus,
+          'circle-stroke-color': C.dotStroke,
+          'circle-stroke-width': 2,
+        },
+      },
+
       {
         id: 'poi-focus', type: 'circle', source: 'pois',
         filter: ['==', ['get', 'focus'], true],
@@ -309,14 +324,6 @@ export function applyImagery(map: maplibregl.Map, on: boolean, theme: 'light' | 
     map.setPaintProperty('poi-label', 'text-halo-width', on ? 1.7 : 1.4)
   }
 
-  // The category tint on building footprints is drawn from OSM building names,
-  // which are not the surveyed list this map runs on — over a photograph it is
-  // just coloured blotches on the wrong roofs. Keep it for the drawn map, where
-  // it still helps a footprint read as "this is a hostel", and drop it here.
-  if (map.getLayer('building-cat')) {
-    map.setLayoutProperty('building-cat', 'visibility', on ? 'none' : 'visible')
-  }
-
   // Over a photograph the drawn ground is a hindrance: what you want is the
   // real roofs, with our outlines on top showing what OSM already knows about.
   const opacity: [string, number, number][] = [
@@ -334,41 +341,4 @@ export function applyImagery(map: maplibregl.Map, on: boolean, theme: 'light' | 
     const prop = map.getLayer(id)!.type === 'fill' ? 'fill-opacity' : 'line-opacity'
     map.setPaintProperty(id, prop, on ? dim : off)
   }
-}
-
-/**
- * A polygon covering everything around the campus, with the campus itself as a
- * hole — the standard way to dim the surroundings of an area map.
- *
- * The outer ring is the campus bounding box grown by a degree, which is far
- * past the pan limits, so the mask never runs out before the viewport does.
- */
-function maskOutside(boundary: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
-  const ring = (boundary.features[0]?.geometry as GeoJSON.Polygon | undefined)?.coordinates?.[0]
-  if (!ring?.length) return { type: 'FeatureCollection', features: [] }
-
-  const lons = ring.map((c) => c[0]!), lats = ring.map((c) => c[1]!)
-  const pad = 1
-  const w = Math.min(...lons) - pad, e = Math.max(...lons) + pad
-  const s = Math.max(-85, Math.min(...lats) - pad), n = Math.min(85, Math.max(...lats) + pad)
-
-  return {
-    type: 'FeatureCollection',
-    features: [{
-      type: 'Feature',
-      properties: {},
-      geometry: {
-        type: 'Polygon',
-        // First ring is the exterior, the rest are holes.
-        coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]], ring as GeoJSON.Position[]],
-      },
-    }],
-  }
-}
-
-/** `match` expression mapping a category key to its colour. */
-function catColour(campus: Campus): maplibregl.ExpressionSpecification {
-  const pairs: (string | string[])[] = []
-  for (const [k, v] of Object.entries(campus.categories)) pairs.push(k, v.color)
-  return ['match', ['get', 'cat'], ...pairs, '#8b949e'] as unknown as maplibregl.ExpressionSpecification
 }

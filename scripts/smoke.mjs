@@ -27,8 +27,7 @@ const ok = (cond, label, detail = '') => {
 await build({
   entryPoints: [join(ROOT, 'src/search/engine.ts')],
   bundle: true, format: 'esm', platform: 'node', outfile: TMP, logLevel: 'silent',
-  // Test the shape the public gets: `import.meta.env` does not exist outside
-  // Vite, and DEV-only code is not part of what ships.
+  // `import.meta.env` does not exist outside Vite; esbuild needs a value.
   define: { 'import.meta.env.DEV': 'false' },
 })
 const { SearchIndex } = await fresh(TMP)
@@ -65,6 +64,33 @@ ok(geo.roads.features.length + geo.paths.features.length > 10,
 ok(geo.boundary.features.length === 1, 'campus boundary drawn')
 ok(Array.isArray(campus.meta.bbox) && campus.meta.bbox.length === 2, 'campus bbox present for framing')
 
+/* ── outlines ────────────────────────────────────────────────────────────── */
+
+// Buildings are containers drawn as an area and nothing else, so the shape is
+// the whole of what they are: a building without a valid ring renders as
+// nothing at all, silently.
+console.log('\noutlines')
+{
+  const areas = campus.pois.filter((p) => p.poly)
+  const buildings = campus.pois.filter((p) => p.cat === 'building')
+  console.log(`  ${areas.length} places with an outline, ${buildings.length} buildings`)
+
+  ok(areas.every((p) => Array.isArray(p.poly) && p.poly.length >= 4),
+     'every outline is a closed ring of at least 3 corners',
+     areas.filter((p) => !(p.poly?.length >= 4)).map((p) => p.name).join(', '))
+  ok(areas.every((p) => p.poly.every((c) => Array.isArray(c) && c.length === 2 && c.every(Number.isFinite))),
+     'every outline point is a finite [lon, lat] pair')
+  ok(areas.every((p) => {
+    const f = p.poly[0], l = p.poly[p.poly.length - 1]
+    return f[0] === l[0] && f[1] === l[1]
+  }), 'the build closes every ring')
+  // A building with no shape draws nothing — worth failing rather than shipping.
+  ok(buildings.every((p) => p.poly?.length >= 4), 'every building has an outline',
+     buildings.filter((p) => !(p.poly?.length >= 4)).map((p) => p.name).join(', '))
+  ok(campus.categories.building && campus.categories.building.pin === false,
+     'buildings are never label-pinned')
+}
+
 /* ── palette ─────────────────────────────────────────────────────────────── */
 
 // 25 categories is past what colour alone can carry, so the palette was solved
@@ -99,14 +125,31 @@ console.log('\npalette')
   const dupes = colors.filter((c, i) => colors.indexOf(c) !== i)
   ok(dupes.length === 0, 'no two categories share a colour', [...new Set(dupes)].join(', '))
 
-  for (const [label, xform, floor] of [['dark', (x) => x, 12], ['light', dim, 8.5]]) {
+  // `building` is held to a weaker floor than the rest, on purpose. Every other
+  // category draws a dot, where colour is doing identity work against 24 other
+  // dots. A building draws no dot at all — only a fill at a fifth opacity,
+  // which each building then overrides with its own tint from the scheme. It
+  // also costs something real: 25 was already at the achievable ceiling of
+  // 12.9, and the best available 26th colour is 8.6 (nearest: sports). Paying
+  // that on the one category whose colour barely works beats paying it on all
+  // of them.
+  const dots = cats.filter(([k]) => k !== 'building')
+  const closest = (list, xform) => {
     let worst = Infinity, pair = ''
-    for (let i = 0; i < cats.length; i++)
-      for (let j = i + 1; j < cats.length; j++) {
-        const d = dE(xform(cats[i][1].color), xform(cats[j][1].color))
-        if (d < worst) { worst = d; pair = `${cats[i][0]}/${cats[j][0]}` }
+    for (let i = 0; i < list.length; i++)
+      for (let j = i + 1; j < list.length; j++) {
+        const d = dE(xform(list[i][1].color), xform(list[j][1].color))
+        if (d < worst) { worst = d; pair = `${list[i][0]}/${list[j][0]}` }
       }
-    ok(worst >= floor, `${label}: closest pair ΔE ${worst.toFixed(1)} (${pair}), floor ${floor}`)
+    return { worst, pair }
+  }
+  for (const [label, xform, floor] of [['dark', (x) => x, 12], ['light', dim, 8.5]]) {
+    const { worst, pair } = closest(dots, xform)
+    ok(worst >= floor, `${label}: closest dot pair ΔE ${worst.toFixed(1)} (${pair}), floor ${floor}`)
+  }
+  for (const [label, xform, floor] of [['dark', (x) => x, 8], ['light', dim, 5.5]]) {
+    const { worst, pair } = closest(cats, xform)
+    ok(worst >= floor, `${label}: closest pair including buildings ΔE ${worst.toFixed(1)} (${pair}), floor ${floor}`)
   }
 }
 
@@ -159,16 +202,18 @@ ok(!index.search('mess menu today').some((h) => h.kind === 'place' && /menu/i.te
 ok(index.examples().length > 0, 'the empty state suggests something real',
    index.examples().join(', '))
 
-// Surveying was how this map was made, not something the published site offers.
-// Any of these reaching a production build means the switch leaked.
-const devCommands = index.docs.filter((d) => d.kind === 'action' && /^do:(tag|tags)/.test(d.id))
-ok(devCommands.length === 0, 'no tagging commands in a production build',
-   devCommands.map((d) => d.title).join(', '))
-for (const q of ['tag', 'tag mode', 'my tags', 'delete all my tags']) {
-  const hits = index.search(q).filter((h) => h.kind === 'action')
-  ok(!hits.some((h) => /tag/i.test(h.title)), `"${q}" surfaces no tagging command`,
-     hits.map((h) => h.title).join(', '))
+// Surveying is part of the app again, so its commands have to be reachable
+// from search — the toolbar button is not the only way in.
+for (const title of ['Tag mode', 'My tags', 'Delete all my tags']) {
+  ok(index.search(title).some((h) => h.kind === 'action' && h.title === title),
+     `"${title}" is reachable from search`)
 }
+const tagCmds = index.search('tag').filter((h) => h.kind === 'action')
+ok(tagCmds.length > 0, '"tag" surfaces a tagging command', tagCmds.map((h) => h.title).join(', '))
+
+// The switch that keeps OSM-derived places out is unrelated and still holds.
+ok(campus.pois.every((p) => p.src === 'seed'), 'still nothing derived from an OSM tag')
+
 ok(index.examples().every((e) => index.search(e).length > 0),
    'every suggestion actually returns something')
 
@@ -268,7 +313,7 @@ const { buildStyle } = await fresh(STYLE_TMP)
 const { validateStyleMin } = await import('@maplibre/maplibre-gl-style-spec')
 
 for (const theme of ['dark', 'light']) {
-  const style = buildStyle(geo, campus, theme)
+  const style = buildStyle(geo, theme)
   const errors = validateStyleMin(style)
   ok(errors.length === 0, `${theme} style validates (${style.layers.length} layers)`,
      errors.map((e) => e.message).join(' | '))
@@ -315,7 +360,8 @@ for (const file of await walk(srcDir)) {
 
 // Elements the app creates at runtime rather than declaring in the markup:
 // the route badge, and the tag form the tagger renders into the panel.
-const RUNTIME_IDS = new Set(['route-badge', 'tag-name', 'tag-cat', 'tag-desc'])
+const RUNTIME_IDS = new Set(['route-badge', 'tag-name', 'tag-cat', 'tag-desc',
+                             'tag-tint-row', 'tag-tints', 'tag-bar'])
 
 const orphans = [...wanted].filter(([id]) => !present.has(id) && !RUNTIME_IDS.has(id))
 ok(orphans.length === 0, `all ${wanted.size} referenced ids exist in index.html`,

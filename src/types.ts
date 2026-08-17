@@ -10,6 +10,14 @@ export interface Poi {
   unnamed?: true
   /** Tagged in this browser rather than built from a source file. */
   user?: true
+  /**
+   * An outline for this place, as [lon, lat] pairs. Buildings are drawn as this
+   * and nothing else; anything else keeps its dot and label and gets the area
+   * underneath, with the whole of it clickable.
+   */
+  poly?: [number, number][]
+  /** Overrides the category colour — how buildings are told apart. */
+  color?: string
   alt?: string
   hours?: string
   wheelchair?: string

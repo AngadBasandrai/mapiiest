@@ -73,7 +73,7 @@ async function start() {
 
   const map = new maplibregl.Map({
     container: 'map',
-    style: buildStyle(geo, campus, resolved(), base, compact()),
+    style: buildStyle(geo, resolved(), base, compact()),
     bounds: campus.meta.bbox,
     // Asymmetric on a phone, because the two axes have opposite problems. The
     // campus is a wide band on a tall screen, so vertical room is surplus —
@@ -117,8 +117,11 @@ async function start() {
             id: p.id,
             name: p.name,
             cat: p.cat,
-            color: catColour(p.cat),
+            color: placeColour(p),
             pin: !!campus.categories[p.cat]?.pin && !p.unnamed,
+            // A building is drawn as its outline alone: the departments inside
+            // it carry the names, and its own dot would sit on top of them.
+            dot: p.cat !== 'building',
             focus: p.id === focusId,
           },
           geometry: { type: 'Point' as const, coordinates: [p.lon, p.lat] },
@@ -126,15 +129,38 @@ async function start() {
     }
   }
 
+  /** A place's own tint if it has one, else its category's. */
+  function placeColour(p: Poi): string {
+    if (!p.color) return catColour(p.cat)
+    if (resolved() === 'dark') return p.color
+    const n = parseInt(p.color.slice(1), 16)
+    return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+      .map((c) => Math.round(c * 0.62).toString(16).padStart(2, '0')).join('')
+  }
+
+  /** The outlines: buildings, and anything else somebody drew a shape for. */
+  function areaFeatures(): GeoJSON.FeatureCollection {
+    return {
+      type: 'FeatureCollection',
+      features: pois
+        .filter((p) => p.poly && p.poly.length >= 3 && (active.has(p.cat) || p.id === focusId))
+        .map((p) => {
+          const ring = [...p.poly!]
+          const [fx, fy] = ring[0]!, [lx, ly] = ring[ring.length - 1]!
+          if (fx !== lx || fy !== ly) ring.push(ring[0]!)
+          return {
+            type: 'Feature' as const,
+            id: p.id,
+            properties: { id: p.id, cat: p.cat, color: placeColour(p), focus: p.id === focusId },
+            geometry: { type: 'Polygon' as const, coordinates: [ring] },
+          }
+        }),
+    }
+  }
+
   function refreshPois() {
     ;(map.getSource('pois') as maplibregl.GeoJSONSource | undefined)?.setData(poiFeatures())
-    // Tint building footprints belonging to visible categories.
-    if (map.getLayer('building-cat')) {
-      map.setFilter('building-cat', ['all',
-        ['!=', ['get', 'cat'], ''],
-        ['in', ['get', 'cat'], ['literal', [...active]]],
-      ])
-    }
+    ;(map.getSource('areas') as maplibregl.GeoJSONSource | undefined)?.setData(areaFeatures())
     paintChips()
   }
 
@@ -158,8 +184,7 @@ async function start() {
              title="${meta.label} · ${counts[c]}">
              <span class="dot"></span>${meta.label}<span class="n">${counts[c]}</span>
            </button>`).join('')
-      : `<span class="chips-empty">No places on this map yet.${
-          import.meta.env.DEV ? ' Tag one and its layer appears here.' : ''}</span>`
+      : '<span class="chips-empty">No places on this map yet — tag one and its layer appears here.</span>'
     paintChips()
   }
   paintRail()
@@ -228,14 +253,23 @@ async function start() {
     const p = id ? byId.get(id) : undefined
     if (p) focusPoi(p)
   })
-  for (const layer of ['poi-dot', 'poi-label']) {
+  // The whole of an outline is the target, not just the dot on it. MapLibre
+  // fires the dot's handler first where they overlap, and the dot wins: a
+  // department inside a building should open the department.
+  map.on('click', 'place-fill', (e) => {
+    if (map.queryRenderedFeatures(e.point, { layers: ['poi-dot'] }).length) return
+    const id = e.features?.[0]?.properties?.id as string | undefined
+    const p = id ? byId.get(id) : undefined
+    if (p) focusPoi(p)
+  })
+  for (const layer of ['poi-dot', 'poi-label', 'place-fill']) {
     map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer' })
     map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = '' })
   }
 
   /* ── search ───────────────────────────────────────────────────────────── */
 
-  /** Commands the dev-only tagger registers for itself. Empty in a build. */
+  /** Commands the surveying tool registers for itself once it has loaded. */
   const devActions: Record<string, () => void> = {}
 
   const hooks = {
@@ -309,29 +343,30 @@ async function start() {
   registerServiceWorker()
   watchNetwork({ imageryOn: () => imagery, setImagery })
 
-  /* ── surveying (development only) ─────────────────────────────────────── */
+  /* ── surveying ────────────────────────────────────────────────────────── */
 
   /**
-   * The tool the campus was surveyed with: tap the map, name what is there,
-   * export the lot into data/curated/places.json. That work is done and
-   * committed, so it has no business on the published site — this whole block
-   * and the module it pulls in are dropped from a production build.
+   * The tool the campus is surveyed with: mark a point, or trace an outline,
+   * name it, and export the lot into data/curated/places.json.
    *
-   * A dynamic import is what makes that true: a static one would keep the
-   * module in the bundle regardless, since it touches localStorage as it loads.
+   * Tags live in this browser's localStorage and nowhere else — there is no
+   * server, so what you add here is yours until you export it and commit it.
    */
-  if (import.meta.env.DEV) {
+  {
     const tagger = await import('./ui/tagger')
     tagger.initTagger(campus)
     taggedPois = tagger.tagPois
 
     let tagMode = false
+    let tool: 'point' | 'area' = 'point'
+    /** Vertices of the outline being traced, [lon, lat]. */
+    let draft: [number, number][] = []
 
     const tagBtn = document.createElement('button')
     tagBtn.id = 'tag-btn'
     tagBtn.type = 'button'
     tagBtn.setAttribute('aria-pressed', 'false')
-    tagBtn.setAttribute('aria-label', 'Tag a missing place')
+    tagBtn.setAttribute('aria-label', 'Add or edit places')
     tagBtn.innerHTML = `
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
         <path d="M8 1.8 C5.5 1.8 3.6 3.7 3.6 6.1 C3.6 9.2 8 14.2 8 14.2 C8 14.2 12.4 9.2 12.4 6.1 C12.4 3.7 10.5 1.8 8 1.8 Z"
@@ -340,25 +375,102 @@ async function start() {
       </svg><span class="n"></span>`
     document.getElementById('bar')!.insertBefore(tagBtn, document.getElementById('layers-btn'))
 
-    const paintTagBtn = () => {
+    // The toolbar only exists while tagging, and says what the next tap will do.
+    const bar = document.createElement('div')
+    bar.id = 'tag-bar'
+    bar.hidden = true
+    document.body.append(bar)
+
+    function paintTagBtn() {
       const n = tagger.tagCount()
       tagBtn.querySelector('.n')!.textContent = n ? String(n) : ''
       tagBtn.setAttribute('aria-pressed', String(tagMode))
-      tagBtn.title = tagMode
-        ? 'Tag mode on — tap the map to add a place'
-        : `Add missing places${n ? ` · ${n} tagged` : ''}`
+      tagBtn.title = tagMode ? 'Editing — tap the map to add' : `Add or edit places${n ? ` · ${n} yours` : ''}`
     }
 
-    const setTagMode = (on: boolean) => {
+    function paintTagBar() {
+      bar.hidden = !tagMode
+      if (!tagMode) return
+      bar.innerHTML = `
+        <span class="tools">
+          <button data-tool="point" class="${tool === 'point' ? 'on' : ''}">point</button>
+          <button data-tool="area" class="${tool === 'area' ? 'on' : ''}">area</button>
+        </span>
+        <span class="say">${
+          tool === 'point'
+            ? 'tap a spot · tap a place of yours to edit it'
+            : draft.length === 0 ? 'tap the corners of the outline'
+            : `${draft.length} point${draft.length === 1 ? '' : 's'}${draft.length < 3 ? ' · need 3' : ''}`
+        }</span>
+        ${tool === 'area' && draft.length ? `
+          <button data-draft-undo>undo</button>
+          <button data-draft-done class="primary" ${draft.length < 3 ? 'disabled' : ''}>finish</button>
+          <button data-draft-cancel class="x" aria-label="Discard outline">&times;</button>` : ''}`
+    }
+
+    /** The outline in progress, drawn over everything else. */
+    function paintDraft() {
+      const src = map.getSource('draft') as maplibregl.GeoJSONSource | undefined
+      if (!src) return
+      const features: GeoJSON.Feature[] = draft.map((c, i) => ({
+        type: 'Feature',
+        properties: { i },
+        geometry: { type: 'Point', coordinates: c },
+      }))
+      if (draft.length >= 2) {
+        features.push({
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: [...draft, draft[0]!] },
+        })
+      }
+      if (draft.length >= 3) {
+        features.push({
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'Polygon', coordinates: [[...draft, draft[0]!]] },
+        })
+      }
+      src.setData({ type: 'FeatureCollection', features })
+    }
+
+    function setDraft(next: [number, number][]) {
+      draft = next
+      paintDraft()
+      paintTagBar()
+    }
+
+    function setTagMode(on: boolean) {
       tagMode = on
       document.body.classList.toggle('tagging', on)
+      if (!on) setDraft([])
       paintTagBtn()
-      // Imagery makes tagging possible at all — you cannot mark a building you
-      // cannot see — so the first time in, turn it on.
+      paintTagBar()
+      // You cannot outline a building you cannot see.
       if (on && !imagery) setImagery(true)
     }
+
     tagBtn.addEventListener('click', () => setTagMode(!tagMode))
     paintTagBtn()
+
+    bar.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement
+      const pick = t.closest('[data-tool]') as HTMLElement | null
+      if (pick) { tool = pick.dataset.tool as 'point' | 'area'; setDraft([]); return }
+      if (t.closest('[data-draft-undo]')) { setDraft(draft.slice(0, -1)); return }
+      if (t.closest('[data-draft-cancel]')) { setDraft([]); return }
+      if (t.closest('[data-draft-done]')) finishArea()
+    })
+
+    function finishArea() {
+      if (draft.length < 3) return
+      const ring = draft
+      // Somewhere to fly to and to sit in a search result: the middle of it.
+      const lon = ring.reduce((a, c) => a + c[0], 0) / ring.length
+      const lat = ring.reduce((a, c) => a + c[1], 0) / ring.length
+      setDraft([])
+      tagger.showTagForm(lat, lon, undefined, () => setTagMode(false), ring)
+    }
 
     devActions['tag-mode'] = () => setTagMode(!tagMode)
     devActions['tags'] = () => tagger.showTagList()
@@ -366,11 +478,22 @@ async function start() {
 
     map.on('click', (e) => {
       if (!tagMode) return
-      // A building under the cursor gives the form a name to start from, and
-      // tells you the footprint is already mapped even if it is nameless.
-      const hit = map.queryRenderedFeatures(e.point, { layers: ['building'] })[0]
-      const near = (hit?.properties?.name as string) || undefined
-      tagger.showTagForm(e.lngLat.lat, e.lngLat.lng, near, () => setTagMode(false))
+
+      if (tool === 'area') {
+        setDraft([...draft, [+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]])
+        return
+      }
+
+      // Tapping something of your own edits it rather than stacking a second
+      // place on top — which is what you meant every time.
+      const hit = map.queryRenderedFeatures(e.point, { layers: ['poi-dot', 'place-fill'] })[0]
+      const existing = hit?.properties?.id ? byId.get(hit.properties.id as string) : undefined
+      if (existing?.user) { tagger.showEditForm(existing.id, () => setTagMode(false)); return }
+
+      const under = map.queryRenderedFeatures(e.point, { layers: ['building'] })[0]
+      tagger.showTagForm(e.lngLat.lat, e.lngLat.lng,
+                         (under?.properties?.name as string) || undefined,
+                         () => setTagMode(false))
     })
 
     // Categories that had something in them last time the map was painted.
@@ -390,6 +513,9 @@ async function start() {
       refreshPois()
       paintTagBtn()
     })
+
+    // The draft lives in the style, so a theme switch has to refill it.
+    onThemeChange(() => setTimeout(paintDraft, 0))
   }
 
   /* ── chrome ───────────────────────────────────────────────────────────── */
@@ -422,7 +548,7 @@ async function start() {
     paintRail()
     // setStyle swaps the basemap wholesale, so the two dynamic sources have to
     // be refilled once the new style is live.
-    map.setStyle(buildStyle(geo, campus, t, base, compact()))
+    map.setStyle(buildStyle(geo, t, base, compact()))
     map.once('styledata', () => {
       applyImagery(map, imagery, t)
       refreshPois()

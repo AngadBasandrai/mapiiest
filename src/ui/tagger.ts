@@ -24,9 +24,30 @@ export interface Tag {
   lat: number
   lon: number
   desc?: string
+  /** Outline as [lon, lat] pairs, open (the build closes it). */
+  poly?: [number, number][]
+  /** Overrides the category colour. How one building is told from the next. */
+  color?: string
   /** ISO date the tag was made, so an export says how old its rows are. */
   on: string
 }
+
+/**
+ * The tints a building can take. Buildings all share one category, so the
+ * category colour cannot tell them apart — this is the scheme to pick from
+ * instead. Muted on purpose: these are drawn at a fifth opacity over a
+ * photograph, and a saturated fill buries the roof underneath it.
+ */
+export const TINTS: [string, string][] = [
+  ['#9aa7b8', 'Slate'],
+  ['#7fa8d9', 'Blue'],
+  ['#8fc9c4', 'Teal'],
+  ['#8fbf7f', 'Green'],
+  ['#c9bd7f', 'Khaki'],
+  ['#e0a458', 'Sand'],
+  ['#d98f8f', 'Clay'],
+  ['#c58fbf', 'Mauve'],
+]
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
@@ -74,7 +95,13 @@ export function tagPois(): Poi[] {
     src: 'seed' as const,
     desc: t.desc,
     user: true as const,
+    ...(t.poly?.length ? { poly: t.poly } : {}),
+    ...(t.color ? { color: t.color } : {}),
   }))
+}
+
+export function getTag(id: string): Tag | undefined {
+  return tags.find((t) => t.id === id)
 }
 
 export function deleteTag(id: string) {
@@ -126,6 +153,8 @@ export function initTagger(c: Campus) {
     if (t.closest('[data-tag-export]')) { download(); return }
     if (t.closest('[data-tag-copy]')) { copy(t.closest('[data-tag-copy]') as HTMLElement); return }
     if (t.closest('[data-tag-clear]')) { clearAllTags(); return }
+    const edit = t.closest('[data-tag-edit]') as HTMLElement | null
+    if (edit) { showEditForm(edit.dataset.tagEdit!); return }
     const del = t.closest('[data-tag-del]') as HTMLElement | null
     if (del) { deleteTag(del.dataset.tagDel!); showTagList(); return }
   })
@@ -140,47 +169,98 @@ export function initTagger(c: Campus) {
   })
 }
 
-let pending: { lat: number; lon: number; near?: string } | null = null
+interface Pending {
+  /** Set when editing something that already exists rather than creating. */
+  id?: string
+  lat: number
+  lon: number
+  poly?: [number, number][]
+  near?: string
+}
+let pending: Pending | null = null
 
-/** Open the form for a point on the map. `near` prefills from a building name. */
-export function showTagForm(lat: number, lon: number, near?: string, done?: () => void) {
-  pending = { lat, lon, near }
-  onDone = done ?? null
-
+function form(title: string, kind: string, t: Partial<Tag>, near?: string) {
+  const cat = t.cat ?? (t.poly ? 'building' : 'academic')
   const options = Object.entries(campus.categories)
-    .map(([k, v]) => `<option value="${k}"${k === 'academic' ? ' selected' : ''}>${esc(v.label)}</option>`)
+    .map(([k, v]) => `<option value="${k}"${k === cat ? ' selected' : ''}>${esc(v.label)}</option>`)
     .join('')
+  const chosen = t.color ?? TINTS[0]![0]
+  const swatches = TINTS.map(([hex, label]) =>
+    `<button type="button" class="swatch${hex === chosen ? ' on' : ''}" data-tint="${hex}"
+             style="background:${hex}" title="${esc(label)}" aria-label="${esc(label)}"></button>`).join('')
 
-  panelShell('Tag this place', `${lat.toFixed(5)}, ${lon.toFixed(5)}`, `
+  panelShell(title, kind, `
     <div class="tag-form">
       <label for="tag-name">Name</label>
       <input id="tag-name" type="text" autocomplete="off" spellcheck="false"
-             placeholder="e.g. Civil Engineering Dept" value="${esc(near ?? '')}">
+             placeholder="e.g. Civil Engineering Dept" value="${esc(t.name ?? near ?? '')}">
 
       <label for="tag-cat">What is it</label>
       <select id="tag-cat">${options}</select>
 
+      <div id="tag-tint-row" hidden>
+        <label>Colour</label>
+        <div class="swatches" id="tag-tints">${swatches}</div>
+      </div>
+
       <label for="tag-desc">Note <span class="opt">optional</span></label>
-      <input id="tag-desc" type="text" autocomplete="off" placeholder="why a student cares">
+      <input id="tag-desc" type="text" autocomplete="off"
+             placeholder="why a student cares" value="${esc(t.desc ?? '')}">
 
       <div class="p-actions">
-        <button data-tag-save class="primary">Save tag</button>
+        <button data-tag-save class="primary">${t.id ? 'Save changes' : 'Save tag'}</button>
         <button data-tag-cancel>Cancel</button>
       </div>
+      ${t.id ? `<div class="p-actions">
+        <button data-tag-del="${esc(t.id)}" class="danger">Delete this place</button>
+      </div>` : ''}
     </div>
 
-    <p class="p-note">Saved in this browser only — nothing is uploaded. Export
-    the set from <b>My tags</b> in search when you want to commit
-    them to <code>data/curated/places.json</code>.</p>
+    <p class="p-note">${t.poly?.length ? `An outline of <b>${t.poly.length}</b> points. ` : ''}Saved
+    in this browser only — nothing is uploaded. Export the set from <b>My tags</b>
+    in search when you want to commit it to
+    <code>data/curated/places.json</code>.</p>`)
 
-    <p class="src">Somewhere real and permanent? It belongs in OpenStreetMap —
-    <a href="https://www.openstreetmap.org/edit#map=19/${lat.toFixed(5)}/${lon.toFixed(5)}"
-       target="_blank" rel="noopener">edit this spot →</a> and it arrives here on
-    the next build, along with every other map that reads OSM.</p>`)
+  // Every building shares one category, so the category colour cannot tell one
+  // from the next — the tint does. It means nothing for anything else, so it
+  // only appears for a building.
+  const sel = document.getElementById('tag-cat') as HTMLSelectElement
+  const row = document.getElementById('tag-tint-row') as HTMLElement
+  const syncTint = () => { row.hidden = sel.value !== 'building' }
+  sel.addEventListener('change', syncTint)
+  syncTint()
+
+  document.getElementById('tag-tints')?.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-tint]') as HTMLElement | null
+    if (!b) return
+    document.querySelectorAll('#tag-tints .swatch').forEach((x) => x.classList.remove('on'))
+    b.classList.add('on')
+  })
 
   const name = document.getElementById('tag-name') as HTMLInputElement | null
   name?.focus()
   name?.select()
+}
+
+/** Open the form for a new place. `poly` makes it an area; `near` prefills. */
+export function showTagForm(
+  lat: number, lon: number, near?: string, done?: () => void,
+  poly?: [number, number][],
+) {
+  pending = { lat, lon, near, ...(poly ? { poly } : {}) }
+  onDone = done ?? null
+  form(poly ? 'Tag this area' : 'Tag this place',
+       poly ? `outline · ${poly.length} points` : `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+       poly ? { poly } : {}, near)
+}
+
+/** Open the form for something already tagged, to change or delete it. */
+export function showEditForm(id: string, done?: () => void) {
+  const t = tags.find((x) => x.id === id)
+  if (!t) return
+  pending = { id: t.id, lat: t.lat, lon: t.lon, ...(t.poly ? { poly: t.poly } : {}) }
+  onDone = done ?? null
+  form('Edit place', t.poly?.length ? `outline · ${t.poly.length} points` : 'point', t)
 }
 
 function save() {
@@ -188,6 +268,7 @@ function save() {
   const name = (document.getElementById('tag-name') as HTMLInputElement).value.trim()
   const cat = (document.getElementById('tag-cat') as HTMLSelectElement).value
   const desc = (document.getElementById('tag-desc') as HTMLInputElement).value.trim()
+  const tint = (document.querySelector('#tag-tints .swatch.on') as HTMLElement | null)?.dataset.tint
 
   if (!name) {
     const el = document.getElementById('tag-name') as HTMLInputElement
@@ -196,15 +277,22 @@ function save() {
     return
   }
 
-  tags = [...tags, {
-    id: slug(name),
+  const existing = pending.id ? tags.find((t) => t.id === pending!.id) : undefined
+  const next: Tag = {
+    id: pending.id ?? slug(name),
     name,
     cat,
     lat: +pending.lat.toFixed(6),
     lon: +pending.lon.toFixed(6),
+    ...(pending.poly?.length ? { poly: pending.poly } : {}),
+    ...(cat === 'building' && tint ? { color: tint } : {}),
     ...(desc ? { desc } : {}),
-    on: new Date().toISOString().slice(0, 10),
-  }]
+    // Keep the original survey date when editing: it says when the ground was
+    // seen, not when the typo was fixed.
+    on: existing?.on ?? new Date().toISOString().slice(0, 10),
+  }
+
+  tags = pending.id ? tags.map((t) => (t.id === pending!.id ? next : t)) : [...tags, next]
   pending = null
   write()
   showTagList()
@@ -221,11 +309,12 @@ export function showTagList() {
   const rows = tags.length
     ? tags.map((t) => `
         <div class="tag-row">
-          <span class="dot" style="background:${campus.categories[t.cat]?.color ?? '#8b949e'}"></span>
+          <span class="dot" style="background:${t.color ?? campus.categories[t.cat]?.color ?? '#8b949e'}"></span>
           <span class="tag-main">
             <b>${esc(t.name)}</b>
-            <em>${esc(campus.categories[t.cat]?.label ?? t.cat)} · ${esc(t.on)}</em>
+            <em>${esc(campus.categories[t.cat]?.label ?? t.cat)}${t.poly?.length ? ' · area' : ''} · ${esc(t.on)}</em>
           </span>
+          <button class="linkish" data-tag-edit="${esc(t.id)}" aria-label="Edit ${esc(t.name)}">edit</button>
           <button data-tag-del="${esc(t.id)}" aria-label="Delete ${esc(t.name)}">&times;</button>
         </div>`).join('')
     : `<p class="p-note">No tags yet. Turn on tag mode in the top bar, then tap
