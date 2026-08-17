@@ -65,8 +65,14 @@ mark something:
 
 - **point** — tap a spot. Tapping a place of your own opens it for editing
   instead of stacking a second one on top.
-- **area** — tap the corners, then *finish*. Three corners minimum; *undo* drops
-  the last one.
+- **area** — tap the corners, then *finish*, then tap where the **marker**
+  goes. Three corners minimum; *undo* drops the last one.
+
+The outline and the marker are separate things, chosen separately. An outline
+says what a place occupies; the marker says where its dot belongs — the door,
+the counter, the end of the jetty — which is rarely the middle of the shape. For
+a building the marker is never drawn, so *use centre* skips that step. **Move
+marker** on an existing place moves the dot and leaves the outline untouched.
 
 An outline defaults to the **Buildings** category, which is drawn as an area and
 nothing else. Every building shares that one category, so the category colour

@@ -104,6 +104,22 @@ export function getTag(id: string): Tag | undefined {
   return tags.find((t) => t.id === id)
 }
 
+/**
+ * Move a place's marker, leaving its outline alone.
+ *
+ * The two are independent: an outline says what a place occupies, the marker
+ * says where to put its dot — the door, the counter, the end of the jetty — and
+ * the middle of a shape is rarely any of those.
+ */
+export function movePoint(id: string, lon: number, lat: number) {
+  tags = tags.map((t) => (t.id === id ? { ...t, lat: +lat.toFixed(6), lon: +lon.toFixed(6) } : t))
+  write()
+}
+
+/** The map owns tapping, so it registers what to do when the form asks. */
+let requestMove: ((id: string) => void) | null = null
+export function onRequestMovePoint(fn: (id: string) => void) { requestMove = fn }
+
 export function deleteTag(id: string) {
   tags = tags.filter((t) => t.id !== id)
   write()
@@ -153,6 +169,8 @@ export function initTagger(c: Campus) {
     if (t.closest('[data-tag-export]')) { download(); return }
     if (t.closest('[data-tag-copy]')) { copy(t.closest('[data-tag-copy]') as HTMLElement); return }
     if (t.closest('[data-tag-clear]')) { clearAllTags(); return }
+    const move = t.closest('[data-tag-move]') as HTMLElement | null
+    if (move) { requestMove?.(move.dataset.tagMove!); return }
     const edit = t.closest('[data-tag-edit]') as HTMLElement | null
     if (edit) { showEditForm(edit.dataset.tagEdit!); return }
     const del = t.closest('[data-tag-del]') as HTMLElement | null
@@ -212,6 +230,7 @@ function form(title: string, kind: string, t: Partial<Tag>, near?: string) {
         <button data-tag-cancel>Cancel</button>
       </div>
       ${t.id ? `<div class="p-actions">
+        <button data-tag-move="${esc(t.id)}">Move marker</button>
         <button data-tag-del="${esc(t.id)}" class="danger">Delete this place</button>
       </div>` : ''}
     </div>

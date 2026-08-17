@@ -361,6 +361,15 @@ async function start() {
     let tool: 'point' | 'area' = 'point'
     /** Vertices of the outline being traced, [lon, lat]. */
     let draft: [number, number][] = []
+    /**
+     * A finished outline waiting for its marker. An outline and a marker are
+     * separate things — the outline is what a place occupies, the marker is
+     * where its dot belongs, which is the door or the counter far more often
+     * than it is the middle of the shape. So the marker is tapped, not derived.
+     */
+    let ringDone: [number, number][] | null = null
+    /** Set while an existing place's marker is being moved. */
+    let moving: string | null = null
 
     const tagBtn = document.createElement('button')
     tagBtn.id = 'tag-btn'
@@ -391,6 +400,18 @@ async function start() {
     function paintTagBar() {
       bar.hidden = !tagMode
       if (!tagMode) return
+
+      if (moving) {
+        bar.innerHTML = `<span class="say">tap where the marker goes</span>
+          <button data-draft-cancel class="x" aria-label="Cancel">&times;</button>`
+        return
+      }
+      if (ringDone) {
+        bar.innerHTML = `<span class="say">outline set · now tap where the marker goes</span>
+          <button data-marker-centre>use centre</button>
+          <button data-draft-cancel class="x" aria-label="Discard outline">&times;</button>`
+        return
+      }
       bar.innerHTML = `
         <span class="tools">
           <button data-tool="point" class="${tool === 'point' ? 'on' : ''}">point</button>
@@ -408,27 +429,28 @@ async function start() {
           <button data-draft-cancel class="x" aria-label="Discard outline">&times;</button>` : ''}`
     }
 
-    /** The outline in progress, drawn over everything else. */
+    /** The outline in progress — or the finished one still awaiting a marker. */
     function paintDraft() {
       const src = map.getSource('draft') as maplibregl.GeoJSONSource | undefined
       if (!src) return
-      const features: GeoJSON.Feature[] = draft.map((c, i) => ({
+      const ring = ringDone ?? draft
+      const features: GeoJSON.Feature[] = (ringDone ? [] : draft).map((c, i) => ({
         type: 'Feature',
         properties: { i },
         geometry: { type: 'Point', coordinates: c },
       }))
-      if (draft.length >= 2) {
+      if (ring.length >= 2) {
         features.push({
           type: 'Feature',
           properties: {},
-          geometry: { type: 'LineString', coordinates: [...draft, draft[0]!] },
+          geometry: { type: 'LineString', coordinates: [...ring, ring[0]!] },
         })
       }
-      if (draft.length >= 3) {
+      if (ring.length >= 3) {
         features.push({
           type: 'Feature',
           properties: {},
-          geometry: { type: 'Polygon', coordinates: [[...draft, draft[0]!]] },
+          geometry: { type: 'Polygon', coordinates: [[...ring, ring[0]!]] },
         })
       }
       src.setData({ type: 'FeatureCollection', features })
@@ -443,7 +465,7 @@ async function start() {
     function setTagMode(on: boolean) {
       tagMode = on
       document.body.classList.toggle('tagging', on)
-      if (!on) setDraft([])
+      if (!on) { ringDone = null; moving = null; setDraft([]) }
       paintTagBtn()
       paintTagBar()
       // You cannot outline a building you cannot see.
@@ -458,19 +480,43 @@ async function start() {
       const pick = t.closest('[data-tool]') as HTMLElement | null
       if (pick) { tool = pick.dataset.tool as 'point' | 'area'; setDraft([]); return }
       if (t.closest('[data-draft-undo]')) { setDraft(draft.slice(0, -1)); return }
-      if (t.closest('[data-draft-cancel]')) { setDraft([]); return }
-      if (t.closest('[data-draft-done]')) finishArea()
+      if (t.closest('[data-draft-cancel]')) { ringDone = null; moving = null; setDraft([]); return }
+      if (t.closest('[data-draft-done]')) { finishArea(); return }
+      if (t.closest('[data-marker-centre]')) {
+        // For a building the marker is never drawn, so the middle is as good a
+        // place as any to hang search results and the fly-to off.
+        const r = ringDone
+        if (!r) return
+        openAreaForm(
+          r.reduce((a, c) => a + c[1], 0) / r.length,
+          r.reduce((a, c) => a + c[0], 0) / r.length,
+        )
+      }
     })
 
     function finishArea() {
       if (draft.length < 3) return
-      const ring = draft
-      // Somewhere to fly to and to sit in a search result: the middle of it.
-      const lon = ring.reduce((a, c) => a + c[0], 0) / ring.length
-      const lat = ring.reduce((a, c) => a + c[1], 0) / ring.length
+      ringDone = draft
+      draft = []
+      paintDraft()
+      paintTagBar()
+    }
+
+    /** The outline is settled and the marker has been chosen; name the thing. */
+    function openAreaForm(lat: number, lon: number) {
+      const ring = ringDone
+      if (!ring) return
+      ringDone = null
       setDraft([])
       tagger.showTagForm(lat, lon, undefined, () => setTagMode(false), ring)
     }
+
+    tagger.onRequestMovePoint((id) => {
+      moving = id
+      if (!tagMode) setTagMode(true)
+      hidePanel()
+      paintTagBar()
+    })
 
     devActions['tag-mode'] = () => setTagMode(!tagMode)
     devActions['tags'] = () => tagger.showTagList()
@@ -478,6 +524,17 @@ async function start() {
 
     map.on('click', (e) => {
       if (!tagMode) return
+
+      // Moving an existing marker, or choosing one for an outline just drawn.
+      if (moving) {
+        tagger.movePoint(moving, e.lngLat.lng, e.lngLat.lat)
+        const id = moving
+        moving = null
+        paintTagBar()
+        tagger.showEditForm(id, () => setTagMode(false))
+        return
+      }
+      if (ringDone) { openAreaForm(e.lngLat.lat, e.lngLat.lng); return }
 
       if (tool === 'area') {
         setDraft([...draft, [+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]])

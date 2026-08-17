@@ -388,9 +388,31 @@ async function check(name, width, height, theme) {
     ok(draft === 4, 'tracing an outline drops a vertex per tap', `${draft} vertices`)
 
     await page.click('#tag-bar [data-draft-done]')
+
+    // Finishing the outline must NOT open the form yet: the marker is a
+    // separate choice, not the middle of the shape.
+    const afterFinish = await page.evaluate(() => ({
+      form: !!document.getElementById('tag-name'),
+      say: document.querySelector('#tag-bar .say')?.textContent?.trim() ?? '',
+      ringStillDrawn: window.__map.getSource('draft')._data.features
+        .some((f) => f.geometry.type === 'Polygon'),
+    }))
+    ok(!afterFinish.form, 'finishing an outline does not open the form yet')
+    ok(/marker/i.test(afterFinish.say), 'it asks for the marker instead', afterFinish.say)
+    ok(afterFinish.ringStillDrawn, 'and keeps the outline on screen while you choose')
+
+    // Tap deliberately off-centre — near one corner — so "where I tapped" and
+    // "the middle of the shape" cannot be confused for each other.
+    const markerPx = { x: ox + 12, y: oy + 50 }
+    const wanted = await page.evaluate((pt) => {
+      const ll = window.__map.unproject([pt.x, pt.y])
+      return { lon: +ll.lng.toFixed(6), lat: +ll.lat.toFixed(6) }
+    }, markerPx)
+    await page.mouse.click(markerPx.x, markerPx.y)
+
     const formUp = await page.waitForSelector('#tag-name', { timeout: 4000 })
       .then(() => true).catch(() => false)
-    ok(formUp, 'finishing an outline opens the form')
+    ok(formUp, 'tapping the marker opens the form')
 
     if (formUp) {
       const defaults = await page.evaluate(() => ({
@@ -400,61 +422,82 @@ async function check(name, width, height, theme) {
       ok(defaults.cat === 'building', 'an outline defaults to a building', defaults.cat)
       ok(defaults.tints, 'and offers the colour scheme')
 
+      // Save it as something that draws a dot, so the marker is visible and
+      // its position can be checked against the tap.
       await page.type('#tag-name', 'Verify Block', { delay: 6 })
-      await page.click('#tag-tints [data-tint="#e0a458"]')
+      await page.select('#tag-cat', 'canteen')
       await page.click('[data-tag-save]')
       await new Promise((r) => setTimeout(r, 700))
 
       const drawn = await page.evaluate(() => {
         const m = window.__map
-        const area = m.getSource('areas')._data.features.find((f) => f.properties.cat === 'building')
+        const area = m.getSource('areas')._data.features.find((f) => f.properties.id?.startsWith('verify-block'))
         const dot = m.getSource('pois')._data.features.find((f) => f.properties.name === 'Verify Block')
+        const ring = area?.geometry.coordinates[0] ?? []
+        const n = Math.max(ring.length - 1, 1)
         return {
-          tint: area?.properties.color,
+          hasArea: !!area,
           drawsDot: dot?.properties.dot,
-          pinned: dot?.properties.pin,
-          stored: JSON.parse(localStorage.getItem('campusmap.tags.v1') || '[]')[0]?.color,
+          marker: dot?.geometry.coordinates,
+          centroid: [ring.slice(0, n).reduce((a, c) => a + c[0], 0) / n,
+                     ring.slice(0, n).reduce((a, c) => a + c[1], 0) / n],
+          stored: JSON.parse(localStorage.getItem('campusmap.tags.v1') || '[]')[0],
         }
       })
-      // Stored as chosen; drawn through the same 0.62 dimming every other
-      // colour gets on the light theme, so the expected value depends on it.
-      const dimmed = '#' + [1, 3, 5].map((i) =>
-        Math.round(parseInt('#e0a458'.slice(i, i + 2), 16) * 0.62).toString(16).padStart(2, '0')).join('')
-      ok(drawn.stored === '#e0a458', 'the chosen tint is what gets stored', String(drawn.stored))
-      ok(drawn.tint === '#e0a458' || drawn.tint === dimmed,
-         'and what gets drawn, dimmed to suit the theme', String(drawn.tint))
-      ok(drawn.drawsDot === false, 'a building draws no dot')
-      ok(drawn.pinned === false, 'and no label')
+      ok(drawn.hasArea, 'the outline is kept')
+      ok(drawn.drawsDot === true, 'a non-building keeps its dot on top of it')
+
+      const near = (a, b) => Math.abs(a - b) < 1e-5
+      ok(near(drawn.marker?.[0], wanted.lon) && near(drawn.marker?.[1], wanted.lat),
+         'the marker sits where it was tapped',
+         `${drawn.marker} vs tapped ${[wanted.lon, wanted.lat]}`)
+      // The whole point of the change: independent of the shape's middle.
+      const off = Math.hypot(drawn.marker[0] - drawn.centroid[0], drawn.marker[1] - drawn.centroid[1])
+      ok(off > 1e-5, 'and not at the centroid of the outline',
+         `${off.toExponential(1)} deg from centre`)
+      ok(drawn.stored?.poly?.length >= 3, 'both the outline and the marker are stored',
+         `${drawn.stored?.poly?.length} outline points`)
 
       // A corner, not the middle: the whole area is the target.
       await page.keyboard.press('Escape')
-      await page.mouse.click(ox + 8, oy + 52)
+      await page.mouse.click(ox + 80, oy + 8)
       await new Promise((r) => setTimeout(r, 600))
       const opened = await page.evaluate(() =>
         document.querySelector('#panel h2')?.textContent ?? '')
       ok(opened === 'Verify Block', 'clicking anywhere inside it opens it', opened || 'nothing')
 
-      // And tapping your own place in tag mode edits rather than stacking.
+      // And the marker can be moved later without touching the outline.
       await page.click('#tag-btn')
       await page.click('#tag-bar [data-tool="point"]')
-      const at = await page.evaluate(() => {
-        const r = window.__map.getSource('areas')._data.features
-          .find((f) => f.properties.cat === 'building').geometry.coordinates[0]
-        const n = r.length - 1
-        const pt = window.__map.project([
-          r.slice(0, n).reduce((a, c) => a + c[0], 0) / n,
-          r.slice(0, n).reduce((a, c) => a + c[1], 0) / n,
-        ])
+      const dotPx = await page.evaluate(() => {
+        const d = window.__map.getSource('pois')._data.features
+          .find((f) => f.properties.name === 'Verify Block')
+        const pt = window.__map.project(d.geometry.coordinates)
         return { x: Math.round(pt.x), y: Math.round(pt.y) }
       })
-      await page.mouse.click(at.x, at.y)
-      await page.waitForSelector('#tag-name', { timeout: 4000 }).catch(() => {})
-      const editing = await page.evaluate(() => ({
-        title: document.querySelector('#panel h2')?.textContent,
-        name: document.getElementById('tag-name')?.value,
-      }))
-      ok(editing.title === 'Edit place' && editing.name === 'Verify Block',
-         'tapping your own place edits it', `${editing.title} / ${editing.name}`)
+      await page.mouse.click(dotPx.x, dotPx.y)
+      const editing = await page.waitForSelector('[data-tag-move]', { timeout: 4000 })
+        .then(() => true).catch(() => false)
+      ok(editing, 'editing a place offers Move marker')
+
+      if (editing) {
+        const beforeMove = await page.evaluate(() =>
+          JSON.parse(localStorage.getItem('campusmap.tags.v1'))[0])
+        await page.click('[data-tag-move]')
+        const asking = await page.evaluate(() =>
+          document.querySelector('#tag-bar .say')?.textContent?.trim() ?? '')
+        ok(/marker/i.test(asking), 'and asks where to put it', asking)
+
+        await page.mouse.click(dotPx.x + 40, dotPx.y - 30)
+        await new Promise((r) => setTimeout(r, 500))
+        const afterMove = await page.evaluate(() =>
+          JSON.parse(localStorage.getItem('campusmap.tags.v1'))[0])
+        ok(afterMove.lat !== beforeMove.lat || afterMove.lon !== beforeMove.lon,
+           'moving the marker moves only the marker')
+        ok(JSON.stringify(afterMove.poly) === JSON.stringify(beforeMove.poly),
+           'and leaves the outline exactly as it was',
+           `${afterMove.poly?.length} points`)
+      }
 
       await page.evaluate(() => localStorage.removeItem('campusmap.tags.v1'))
       await page.keyboard.press('Escape')
