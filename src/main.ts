@@ -67,11 +67,23 @@ async function start() {
   // Open on the campus itself rather than a fixed zoom: a hard-coded level
   // that frames one campus leaves the next one as a small island in an empty
   // viewport, since nothing outside the boundary is in this extract.
+  // A phone gets fewer, smaller labels and tighter marks: 134 places in a band
+  // 390px wide is a pile of text otherwise.
+  const compact = () => window.matchMedia('(max-width: 760px)').matches
+
   const map = new maplibregl.Map({
     container: 'map',
-    style: buildStyle(geo, campus, resolved(), base),
+    style: buildStyle(geo, campus, resolved(), base, compact()),
     bounds: campus.meta.bbox,
-    fitBoundsOptions: { padding: 24 },
+    // Asymmetric on a phone, because the two axes have opposite problems. The
+    // campus is a wide band on a tall screen, so vertical room is surplus —
+    // spend it keeping the band clear of the header and the thumb search bar.
+    // Horizontally there is none to spare, but a little is still owed: a pin
+    // flush against the edge has its label run off the screen, and no amount of
+    // anchor-dodging can fix that.
+    fitBoundsOptions: {
+      padding: compact() ? { top: 60, bottom: 84, left: 28, right: 28 } : 24,
+    },
     minZoom: 13,
     maxZoom: 19.5,
     maxBounds: panBounds(campus),
@@ -410,7 +422,7 @@ async function start() {
     paintRail()
     // setStyle swaps the basemap wholesale, so the two dynamic sources have to
     // be refilled once the new style is live.
-    map.setStyle(buildStyle(geo, campus, t, base))
+    map.setStyle(buildStyle(geo, campus, t, base, compact()))
     map.once('styledata', () => {
       applyImagery(map, imagery, t)
       refreshPois()

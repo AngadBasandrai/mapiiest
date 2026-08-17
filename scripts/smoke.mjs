@@ -225,6 +225,34 @@ console.log('\ninstall')
   ok(/apple-mobile-web-app-capable/.test(html), 'index.html carries the iOS standalone hints')
 }
 
+/* ── origin association ──────────────────────────────────────────────────── */
+
+// iiest.wiki claims this origin via scope_extensions so that navigations here
+// stay inside that installed app. The claim only works if this side publishes
+// consent, and a mismatch fails *silently* — no console warning, nothing in
+// devtools, the app just stops keeping links in-window. So assert it.
+console.log('\norigin association')
+{
+  const REL = 'public/.well-known/web-app-origin-association'
+  const IDENTITY = 'https://iiest.wiki/'
+  ok(existsSync(join(ROOT, REL)), `${REL} exists`)
+  if (existsSync(join(ROOT, REL))) {
+    const raw = await readFile(join(ROOT, REL), 'utf8')
+    let parsed = null
+    try { parsed = JSON.parse(raw) } catch (e) { void e }
+    ok(!!parsed, 'it is valid JSON')
+    const id = parsed?.web_apps?.[0]?.web_app_identity
+    // Character for character, trailing slash included.
+    ok(id === IDENTITY, `web_app_identity is exactly "${IDENTITY}"`, JSON.stringify(id))
+    // The extension is the whole point: the path has to be exact, and a
+    // .json suffix would be served at a different URL.
+    ok(!REL.endsWith('.json'), 'the filename carries no extension')
+  }
+  // Only matters for a branch deploy — this repo uploads an artifact, so Jekyll
+  // never runs — but a missing .nojekyll is how .well-known silently vanishes.
+  ok(existsSync(join(ROOT, 'public/.nojekyll')), '.nojekyll guards the dot-directory')
+}
+
 /* ── map style ───────────────────────────────────────────────────────────── */
 
 // MapLibre validates the style at runtime and refuses to render if it is

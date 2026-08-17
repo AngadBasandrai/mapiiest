@@ -28,6 +28,8 @@ const PALETTE = {
     labelHalo: '#0b0d10',
     dotStroke: '#0b0d10',
     focus: '#58a6ff',
+    outside: '#05070a',
+    outsideOpacity: 0.66,
   },
   // Deliberately not a white map. The campus is a warm paper tone, buildings a
   // half-step darker, and roads the only near-white — so the built area reads
@@ -50,6 +52,10 @@ const PALETTE = {
     labelHalo: '#f4f2ee',
     dotStroke: '#fdfdfc',
     focus: '#1f6feb',
+    // Over a photograph a pale scrim turns the surroundings to milk; a dark one
+    // reads as shade and keeps the campus the bright part in both themes.
+    outside: '#1c2430',
+    outsideOpacity: 0.5,
   },
 } as const
 
@@ -80,6 +86,8 @@ export function buildStyle(
   campus: Campus,
   theme: 'light' | 'dark' = 'dark',
   base = '/',
+  /** Phone-sized viewport: fewer, smaller labels and tighter marks. */
+  compact = false,
 ): StyleSpecification {
   const C = PALETTE[theme]
 
@@ -97,6 +105,7 @@ export function buildStyle(
         attribution: IMAGERY.credit,
       },
       boundary: src(geo.boundary!),
+      outside: src(maskOutside(geo.boundary!)),
       green: src(geo.green!),
       water: src(geo.water!),
       waterway: src(geo.waterway!),
@@ -126,10 +135,6 @@ export function buildStyle(
         paint: { 'line-color': C.water, 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 1, 18, 5] },
       },
 
-      {
-        id: 'campus-edge', type: 'line', source: 'boundary',
-        paint: { 'line-color': C.boundary, 'line-width': 1.2, 'line-dasharray': [3, 2] },
-      },
       {
         id: 'wall', type: 'line', source: 'wall',
         minzoom: 15,
@@ -197,10 +202,35 @@ export function buildStyle(
         paint: { 'fill-color': catColour(campus), 'fill-opacity': 0.16 },
       },
 
+      // Everything beyond the wall, knocked back.
+      //
+      // This is what makes it read as a map *of the campus*. The campus is a
+      // wide band and a phone is tall, so fitting its width leaves half the
+      // screen showing Howrah and the Hooghly — at full contrast that reads as
+      // the subject, and the campus as a stripe through the middle. Dimming the
+      // outside costs nothing and settles which is which.
+      {
+        id: 'outside', type: 'fill', source: 'outside',
+        paint: {
+          'fill-color': C.outside,
+          // Heavier on a phone. The campus is a wide band and a portrait screen
+          // is tall, so fitting the whole of it leaves most of the screen as
+          // surroundings — the more they recede, the less that reads as clutter.
+          'fill-opacity': compact ? C.outsideOpacity + 0.12 : C.outsideOpacity,
+        },
+      },
+      // Above the mask, so the wall itself stays crisp.
+      {
+        id: 'campus-edge', type: 'line', source: 'boundary',
+        paint: { 'line-color': C.boundary, 'line-width': 1.2, 'line-dasharray': [3, 2] },
+      },
+
       {
         id: 'poi-dot', type: 'circle', source: 'pois',
         paint: {
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 2.5, 16, 4.5, 19, 7],
+          'circle-radius': compact
+            ? ['interpolate', ['linear'], ['zoom'], 13, 2, 16, 3.6, 19, 6]
+            : ['interpolate', ['linear'], ['zoom'], 13, 2.5, 16, 4.5, 19, 7],
           'circle-color': ['get', 'color'],
           'circle-stroke-color': C.dotStroke,
           'circle-stroke-width': 1.4,
@@ -208,19 +238,30 @@ export function buildStyle(
       },
       {
         id: 'poi-label', type: 'symbol', source: 'pois',
-        // The default view sits just above z15, so a higher floor here means the
-        // map opens with no labels at all.
-        minzoom: 14.5,
+        // Below the lowest zoom the campus is ever framed at, or the map opens
+        // with no labels at all. A portrait phone fits this campus at z14.4, so
+        // the old 14.5 floor left one entirely unlabelled. Crowding at low zoom
+        // is handled by collision, not by hiding the layer.
+        minzoom: 13.6,
         filter: ['==', ['get', 'pin'], true],
         layout: {
           'text-field': ['get', 'name'],
           'text-font': [FONT],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 14.5, 10, 19, 13.5],
-          'text-offset': [0, 1.05],
-          'text-anchor': 'top',
-          'text-max-width': 8,
+          'text-size': compact
+            ? ['interpolate', ['linear'], ['zoom'], 14.5, 9, 19, 12]
+            : ['interpolate', ['linear'], ['zoom'], 14.5, 10, 19, 13.5],
+          // Let a label pick a side rather than collide and drop out. With 134
+          // places in a band this is the difference between a readable map and
+          // a pile of text — and it stops names running off the screen edge,
+          // which a fixed top anchor cannot avoid.
+          'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
+          'text-radial-offset': compact ? 0.7 : 0.85,
+          'text-justify': 'auto',
+          'text-max-width': compact ? 7 : 8,
           'text-optional': true,
-          'text-padding': 4,
+          // More breathing room between labels means fewer of them survive the
+          // collision pass, which is the point: crowded is worse than fewer.
+          'text-padding': compact ? 7 : 5,
           // Drop the least useful labels first when they collide.
           'symbol-sort-key': ['case', ['==', ['get', 'cat'], 'lecture'], 0,
                                       ['==', ['get', 'cat'], 'academic'], 1, 2],
@@ -292,6 +333,36 @@ export function applyImagery(map: maplibregl.Map, on: boolean, theme: 'light' | 
     if (!map.getLayer(id)) continue
     const prop = map.getLayer(id)!.type === 'fill' ? 'fill-opacity' : 'line-opacity'
     map.setPaintProperty(id, prop, on ? dim : off)
+  }
+}
+
+/**
+ * A polygon covering everything around the campus, with the campus itself as a
+ * hole — the standard way to dim the surroundings of an area map.
+ *
+ * The outer ring is the campus bounding box grown by a degree, which is far
+ * past the pan limits, so the mask never runs out before the viewport does.
+ */
+function maskOutside(boundary: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
+  const ring = (boundary.features[0]?.geometry as GeoJSON.Polygon | undefined)?.coordinates?.[0]
+  if (!ring?.length) return { type: 'FeatureCollection', features: [] }
+
+  const lons = ring.map((c) => c[0]!), lats = ring.map((c) => c[1]!)
+  const pad = 1
+  const w = Math.min(...lons) - pad, e = Math.max(...lons) + pad
+  const s = Math.max(-85, Math.min(...lats) - pad), n = Math.min(85, Math.max(...lats) + pad)
+
+  return {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'Polygon',
+        // First ring is the exterior, the rest are holes.
+        coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]], ring as GeoJSON.Position[]],
+      },
+    }],
   }
 }
 

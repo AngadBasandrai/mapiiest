@@ -24,6 +24,8 @@ npm test           # typecheck + rebuild + smoke test
   to `maps.google.com` for that exact coordinate.
 - **Aerial imagery** under the map, on a toggle — see what is actually there.
 - **Layers** — one per category, appearing as you tag; a bottom sheet on phones.
+- **Everything beyond the wall is dimmed**, so the campus reads as the subject
+  rather than as a stripe through Howrah.
 - **Light and dark**, following the system unless you say otherwise.
 - **Deep links** — `?id=w517920623` focuses a place, `?q=library` opens search.
 - **Installs, and works with no network** — see below.
@@ -72,6 +74,25 @@ browser tab still has no favicon — a launcher icon is a different job.
 A new version does not swap itself in underneath you: when a fresh worker has
 installed, the app offers a **Reload** button. Reloading a map without warning
 loses wherever you had panned to.
+
+## Origin association
+
+`public/.well-known/web-app-origin-association` consents to the
+`scope_extensions` claim that the sibling app at **iiest.wiki** makes over this
+origin, so Chromium keeps navigations here inside that installed app rather than
+dropping them into a browser tab. It is served at
+
+    https://maps.iiest.wiki/.well-known/web-app-origin-association
+
+with no extension and no redirect — both are part of the check — and
+`web_app_identity` has to be `https://iiest.wiki/` character for character,
+trailing slash included. A mismatch fails silently: no console warning, nothing
+in devtools, the app just stops keeping links in-window. `npm test` asserts the
+path, the JSON and that exact string for precisely that reason.
+
+`public/.nojekyll` keeps the dot-directory alive on a branch deploy, where Jekyll
+would strip it. This repo uploads an artifact instead, so Jekyll never runs, but
+the file costs nothing and the failure it prevents is silent too.
 
 ## Imagery
 

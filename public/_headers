@@ -28,6 +28,15 @@
   Content-Type: application/manifest+json; charset=utf-8
   Cache-Control: public, max-age=3600
 
+# Consent for iiest.wiki's scope_extensions claim over this origin, so Chromium
+# keeps navigations here inside that installed app. The path is exact and the
+# file has no extension, so the type has to be declared rather than inferred.
+# GitHub Pages ignores this file entirely and picks its own type; this only
+# takes effect on a host that reads _headers.
+/.well-known/web-app-origin-association
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=3600
+
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

@@ -23,20 +23,33 @@ export const OSM_CAMPUS_URL = `https://www.openstreetmap.org/way/${SITE.osm.camp
 
 type Box = [[number, number], [number, number]]
 
+/** Roughly how far five kilometres is, in degrees, at this campus. */
+const KM = 1 / 111.32
+const SLACK_KM = 5
+
 /**
- * Panning limits: the campus plus a margin of a third of its own span, so the
- * surroundings are reachable but the user cannot drift off into the empty grey
- * where this extract has no data at all.
+ * Panning limits: the campus plus five kilometres in every direction.
+ *
+ * The slack is deliberately generous, and the previous value — a third of the
+ * campus's own span — was the cause of a real bug worth recording. MapLibre
+ * treats `maxBounds` as a hard container: if the viewport at the framing zoom
+ * would not *fit inside* the box, it silently zooms in until it does, and
+ * whatever `fitBounds` asked for is discarded.
+ *
+ * This campus is a band 1.1 km wide and 0.6 km tall. A third of that is a box
+ * about a kilometre high — far shorter than a portrait phone viewport at the
+ * zoom that frames the campus, so on every phone the map opened at z15.8
+ * instead of z14.4: the east and west ends cropped off, two kilometres of
+ * latitude on screen, and the campus a stripe through the middle of Howrah.
+ * Nothing in the framing code was wrong, and none of it had any effect.
+ *
+ * Five kilometres cannot bind on any plausible viewport, so the fence still
+ * stops you panning to another city while the framing decides the view.
  */
 export function panBounds(campus: Campus): Box {
   const [[w, s], [e, n]] = campus.meta.bbox
-  const padX = Math.max((e - w) / 3, 0.002)
-  const padY = Math.max((n - s) / 3, 0.002)
+  const padY = SLACK_KM * KM
+  // Longitude degrees are shorter than latitude ones away from the equator.
+  const padX = padY / Math.max(Math.cos(((s + n) / 2) * Math.PI / 180), 0.2)
   return [[w - padX, s - padY], [e + padX, n + padY]]
-}
-
-/** True when a browser-reported position is close enough to route from. */
-export function onCampus(campus: Campus, lat: number, lon: number): boolean {
-  const [[w, s], [e, n]] = panBounds(campus)
-  return lat > s && lat < n && lon > w && lon < e
 }
