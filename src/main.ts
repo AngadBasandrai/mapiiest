@@ -7,6 +7,7 @@ import { initPalette, openPalette } from './ui/palette'
 import { initPanel, showPoi, hidePanel } from './ui/panel'
 import { cycle as cycleTheme, current as themeChoice, onThemeChange, resolved } from './ui/theme'
 import { SITE, panBounds } from './config'
+import { registerServiceWorker, watchNetwork } from './ui/install'
 
 const boot = document.getElementById('boot')!
 const base = import.meta.env.BASE_URL
@@ -290,6 +291,12 @@ async function start() {
   setImageryChrome(imagery)
   imgBtn.addEventListener('click', () => setImagery(!imagery))
 
+  // Installable and offline-capable: the worker precaches the whole app, and if
+  // the network goes the drawn map stands in for the imagery rather than leaving
+  // dimmed fills over nothing.
+  registerServiceWorker()
+  watchNetwork({ imageryOn: () => imagery, setImagery })
+
   /* ── surveying (development only) ─────────────────────────────────────── */
 
   /**
@@ -425,8 +432,13 @@ async function start() {
   }, 12_000)
 
   map.on('error', (e) => {
+    const msg = e.error?.message ?? String(e)
+    // An unreachable aerial tile is already handled: the service worker tells
+    // install.ts, which falls back to the drawn map and says so. Logging one of
+    // these per tile on top of that is twenty lines of noise about one fact.
+    if (/arcgisonline|offline \(504\)/.test(msg)) return
     // Missing glyphs and the odd tile error are survivable; a style error is not.
-    console.error('[map]', e.error?.message ?? e)
+    console.error('[map]', msg)
   })
 
   map.on('load', () => {

@@ -1,8 +1,8 @@
 # IIEST Shibpur campus map
 
-A map of IIEST Shibpur: the ground, the buildings, the paths and the lakes drawn
-from OpenStreetMap, aerial imagery on a toggle — and **every place put on it by
-hand**.
+An installable, offline-capable map of IIEST Shibpur: the ground, the buildings,
+the paths and the lakes drawn from OpenStreetMap, aerial imagery under it — and
+**every place put on it by hand**.
 
 No place on it is derived from an OpenStreetMap tag. OSM's coverage of this
 campus is thin enough that auto-classifying it produces a sparse, half-wrong
@@ -26,6 +26,52 @@ npm test           # typecheck + rebuild + smoke test
 - **Layers** — one per category, appearing as you tag; a bottom sheet on phones.
 - **Light and dark**, following the system unless you say otherwise.
 - **Deep links** — `?id=w517920623` focuses a place, `?q=library` opens search.
+- **Installs, and works with no network** — see below.
+
+## A webapp, not just a page
+
+Install it from the browser's menu — "Add to Home screen" on Android and iOS,
+the install icon in the address bar on desktop — and it opens in its own window
+with no browser chrome, from a launcher icon, like anything else on the phone.
+
+**It works with no network at all.** A service worker precaches the whole app on
+first visit: the shell, the script, the stylesheet, `campus.json`, `geo.json` and
+the font glyph atlases. That is the entire application — about 950 kB — so there
+is nothing clever to decide about which parts to keep. Offline you get every
+place, the search, the legend, the labels and the drawn map; the browser tab can
+be cold-started with the radio off and it still opens.
+
+Aerial tiles are cached separately, at runtime, capped at 400. They are
+third-party and unbounded, so they must never be allowed to fill the origin's
+storage quota — but the practical effect is that imagery you have already looked
+at is available offline too.
+
+When the tiles cannot be reached the map **falls back to the drawn version and
+says so**, then restores imagery when the network returns. That path is driven by
+the service worker rather than by `navigator.onLine`, for two reasons: the flag
+is true on a captive portal and true when only that one host is blocked, and
+MapLibre drops a failed raster tile silently — no error event, nothing in the
+console — so the page has no way to notice on its own. The worker is the only
+thing that sees the failed request, so it posts a message to the page.
+
+### How it is built
+
+`vite.config.ts` writes `sw.js` at build time with the precache list filled in
+from what the build actually emitted. That is not tidiness: Vite hashes asset
+filenames, so a hand-written list goes stale on the next build and the worker
+serves last week's JavaScript forever. The cache name is a hash of the list, so
+any change to any asset produces a new cache and the old one is dropped. No
+Workbox — it is about fifty lines of cache handling.
+
+`scripts/make-icons.mjs` draws the launcher icons (192, 512, maskable 512, and
+an apple-touch 180) and they are committed. Generated rather than drawn so they
+can be regenerated from the same accent colour the UI uses; a PNG is a zlib
+stream in four chunks, which is less code than a dependency for it. Note the
+browser tab still has no favicon — a launcher icon is a different job.
+
+A new version does not swap itself in underneath you: when a fresh worker has
+installed, the app offers a **Reload** button. Reloading a map without warning
+loses wherever you had panned to.
 
 ## Imagery
 
@@ -193,7 +239,10 @@ It bundles the modules with `import.meta.env.DEV` defined as `false`, so what it
 tests is the shape the public gets.
 
 `npm run verify` drives the built site in headless Chrome at three viewports and
-fails on any console error, failed request, or map that never painted. It picks a
+fails on any console error, failed request, or map that never painted. It also
+loads the app, **cuts the network, cold-reloads, and requires the map to come up
+with all 134 places, its labels and a working search** — the only check that can
+tell a real offline app from a manifest and good intentions. It picks a
 real place out of the current data, searches it, opens it, checks its Google
 Maps link carries that place's own coordinates, toggles the imagery layer, and
 confirms the page neither asks for your location nor offers any way to edit

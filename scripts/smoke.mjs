@@ -6,6 +6,7 @@
 
 import { build } from 'esbuild'
 import { readFile, readdir, rm } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -190,6 +191,38 @@ for (const q of ['h', 'hostel', 'central library', 'water cooler', 'a']) {
   for (let i = 0; i < 50; i++) index.search(q)
   const per = (performance.now() - t0) / 50
   ok(per < 12, `"${q}" ${per.toFixed(2)}ms/query`)
+}
+
+/* ── installability ─────────────────────────────────────────────────────── */
+
+// A manifest that names an icon it does not ship is a manifest that installs
+// with a blank tile, and nothing in the build fails when that happens.
+console.log('\ninstall')
+{
+  const manifest = JSON.parse(await readFile(join(ROOT, 'public/manifest.webmanifest'), 'utf8'))
+  ok(!!manifest.name && !!manifest.short_name, `named "${manifest.short_name}"`)
+  ok(manifest.display === 'standalone', `display: ${manifest.display}`)
+  // Relative, so one manifest serves both the project-site subpath and the
+  // custom domain at the root.
+  ok(!manifest.start_url.startsWith('/') && !manifest.scope.startsWith('/'),
+     'start_url and scope are relative to the manifest', `${manifest.start_url} / ${manifest.scope}`)
+
+  const sizes = manifest.icons.map((i) => i.sizes)
+  ok(sizes.includes('192x192') && sizes.includes('512x512'),
+     'ships the 192 and 512 icons a launcher asks for', sizes.join(', '))
+  ok(manifest.icons.some((i) => i.purpose === 'maskable'),
+     'ships a maskable icon, or Android crops the mark')
+
+  const missing = []
+  for (const icon of manifest.icons) {
+    if (!existsSync(join(ROOT, 'public', icon.src))) missing.push(icon.src)
+  }
+  ok(missing.length === 0, `all ${manifest.icons.length} icon files exist`, missing.join(', '))
+  ok(existsSync(join(ROOT, 'public/apple-touch-icon.png')), 'apple-touch-icon exists')
+
+  const html = await readFile(join(ROOT, 'index.html'), 'utf8')
+  ok(/<link[^>]+rel="manifest"/.test(html), 'index.html links the manifest')
+  ok(/apple-mobile-web-app-capable/.test(html), 'index.html carries the iOS standalone hints')
 }
 
 /* ── map style ───────────────────────────────────────────────────────────── */

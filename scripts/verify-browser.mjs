@@ -427,9 +427,114 @@ async function check(name, width, height, theme) {
   await page.close()
 }
 
+/**
+ * The webapp claims: installable, and it opens with no network at all.
+ *
+ * This is the only check that can prove either. A manifest that lists a missing
+ * icon still validates; a service worker that registers can still cache nothing.
+ * So: load once, cut the network, cold-reload, and require the map to come up
+ * with its places on it.
+ */
+async function checkOfflineApp() {
+  console.log('\ninstallable / offline')
+  const page = await browser.newPage()
+  await page.setViewport({ width: 1440, height: 900 })
+
+  await page.goto(URL_, { waitUntil: 'networkidle2', timeout: 30_000 })
+  await page.waitForFunction(
+    () => document.getElementById('boot')?.classList.contains('gone'), { timeout: 20_000 },
+  ).catch(() => {})
+
+  // The manifest has to be fetchable and its icons have to exist — a launcher
+  // installs a blank tile otherwise, and nothing else would ever say so.
+  const manifest = await page.evaluate(async () => {
+    const href = document.querySelector('link[rel=manifest]')?.href
+    if (!href) return null
+    const res = await fetch(href)
+    if (!res.ok) return { ok: false, status: res.status }
+    const m = await res.json()
+    const icons = await Promise.all(m.icons.map(async (i) => {
+      const r = await fetch(new URL(i.src, href))
+      return r.ok
+    }))
+    return { ok: true, name: m.name, display: m.display, icons, count: m.icons.length }
+  })
+  ok(!!manifest?.ok, 'the manifest is linked and fetchable', manifest ? `HTTP ${manifest.status ?? 200}` : 'no link tag')
+  if (manifest?.ok) {
+    ok(manifest.display === 'standalone', 'it asks for a standalone window', manifest.display)
+    ok(manifest.icons.every(Boolean), `all ${manifest.count} declared icons load`,
+       manifest.icons.map((v, i) => (v ? '' : `#${i} missing`)).filter(Boolean).join(', '))
+  }
+
+  const sw = await page.evaluate(async () => {
+    if (!('serviceWorker' in navigator)) return { supported: false }
+    const reg = await navigator.serviceWorker.getRegistration()
+    if (!reg) return { supported: true, registered: false }
+    await navigator.serviceWorker.ready
+    // Precaching runs in the install step, so give it a moment to finish.
+    for (let i = 0; i < 60; i++) {
+      const name = (await caches.keys()).find((k) => k.startsWith('iiest-map-'))
+      if (name) {
+        const keys = await (await caches.open(name)).keys()
+        if (keys.length >= 10) {
+          return { supported: true, registered: true, cache: name, entries: keys.length,
+                   paths: keys.map((k) => new URL(k.url).pathname) }
+        }
+      }
+      await new Promise((r) => setTimeout(r, 250))
+    }
+    return { supported: true, registered: true, entries: 0 }
+  })
+  ok(sw.registered, 'the service worker registers')
+  ok((sw.entries ?? 0) >= 10, `it precaches the app (${sw.entries} entries)`)
+  if (sw.paths) {
+    // The shell is worthless without the data, and the data is worthless
+    // without the glyphs — a map with no labels is not the app.
+    const needs = ['campus.json', 'geo.json', '.pbf', '.js', '.css']
+    const absent = needs.filter((n) => !sw.paths.some((p) => p.includes(n)))
+    ok(absent.length === 0, 'the precache covers data, fonts, script and styles', absent.join(', '))
+  }
+
+  /* The actual test. */
+  await page.setOfflineMode(true)
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 30_000 })
+  const booted = await page.waitForFunction(
+    () => document.getElementById('boot')?.classList.contains('gone'), { timeout: 25_000 },
+  ).then(() => true).catch(() => false)
+  // Labels need the glyph atlases and a render pass, so poll rather than
+  // reading once — the one-shot version fails on a race, not on a cache miss.
+  const labelled = await page.waitForFunction(
+    () => window.__map?.queryRenderedFeatures({ layers: ['poi-label'] }).length > 0,
+    { timeout: 15_000 },
+  ).then(() => true).catch(() => false)
+  const state = await page.evaluate(() => ({
+    chips: document.querySelectorAll('#layer-chips .chip').length,
+    pins: window.__map?.getSource('pois')?._data?.features?.length ?? 0,
+    labels: window.__map?.queryRenderedFeatures({ layers: ['poi-label'] }).length ?? 0,
+  }))
+  ok(booted, 'the map opens with the network cut')
+  ok(state.pins > 100, `every place is there offline (${state.pins} pins)`)
+  ok(state.chips > 10, `the legend is there offline (${state.chips} chips)`)
+  ok(labelled, `labels render offline (${state.labels}) — the glyphs were cached`)
+
+  // Search is the other half of the app, and it is pure client-side work over
+  // cached data, so it has to keep working too.
+  await page.keyboard.down('Control'); await page.keyboard.press('KeyK'); await page.keyboard.up('Control')
+  await page.waitForFunction(() => !document.getElementById('palette').hidden, { timeout: 4000 }).catch(() => {})
+  await page.type('#palette-input', PLACE.name.slice(0, 12), { delay: 6 })
+  await page.waitForFunction(() => document.querySelectorAll('#palette-results .row').length > 0,
+    { timeout: 4000 }).catch(() => {})
+  const found = await page.$$eval('#palette-results .row-title', (r) => r.map((x) => x.textContent))
+  ok(found.length > 0, `search works offline ("${PLACE.name.slice(0, 12)}" -> ${found.length})`, found[0] ?? 'nothing')
+
+  await page.setOfflineMode(false)
+  await page.close()
+}
+
 await check('desktop-dark', 1440, 900, 'dark')
 await check('desktop-light', 1440, 900, 'light')
 await check('mobile-dark', 402, 874, 'dark')
+await checkOfflineApp()
 
 await browser.close()
 await rm(PROFILE, { recursive: true, force: true })

@@ -7,8 +7,18 @@
 <title>IIEST Shibpur Campus Map</title>
 <meta name="description" content="A map of IIEST Shibpur drawn from OpenStreetMap, with aerial imagery and fast search over every place, surveyed by hand.">
 <!-- No favicon. An empty data URI is how you say that: drop the tag entirely
-     and the browser goes looking for /favicon.ico and logs a 404 instead. -->
+     and the browser goes looking for /favicon.ico and logs a 404 instead.
+     The install icons below are a different job — a launcher needs one. -->
 <link rel="icon" href="data:,">
+
+<!-- Installable: manifest, then the iOS equivalents, which predate it and are
+     still the only way Safari adds a standalone launcher. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="IIEST Map">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
 <script>
   // Set the theme before first paint so there is no flash of the wrong one.
   try {

@@ -598,6 +598,55 @@ button.linkish:hover { color: var(--danger); }
 #boot.gone { display: none; }
 #boot.err { color: var(--danger); padding: 24px; text-align: center; line-height: 1.6; }
 
+/* ── status line ─────────────────────────────────────────────────────── */
+
+/* Sits centred on the bottom edge, above the legend, and out of the way of the
+   thumb search bar on a phone. */
+#toast {
+  position: fixed;
+  bottom: var(--pad);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, calc(100vw - 24px));
+  padding: 8px 10px 8px 12px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--lift);
+  font-size: 12.5px;
+  color: var(--fg-2);
+  line-height: 1.45;
+}
+#toast[hidden] { display: none; }
+#toast.warn { border-color: var(--danger); }
+#toast button {
+  flex: none;
+  padding: 4px 9px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+#toast .x {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--fg-3);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+}
+#toast .x:hover { color: var(--fg); }
+
+/* The legend is anchored to the same edge; lift it clear while a toast is up. */
+body:has(#toast:not([hidden])) #dock { padding-bottom: 46px; }
+
 /* ── mobile ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 760px), (pointer: coarse) and (max-width: 900px) {
@@ -772,6 +821,16 @@ button.linkish:hover { color: var(--danger); }
 
   /* When the sheet is up, the search bar would sit on top of it. */
   body:has(#panel:not([hidden])) #open-search { display: none; }
+
+  #toast {
+    left: var(--pad); right: var(--pad);
+    bottom: calc(var(--pad) + 58px + env(safe-area-inset-bottom));
+    transform: none;
+    max-width: none;
+  }
+  body:has(#panel:not([hidden])) #toast { display: none; }
+  /* The dock is static on a phone, so the desktop clearance rule cannot apply. */
+  body:has(#toast:not([hidden])) #dock { padding-bottom: 0; }
 
   /* Palette fills the screen — a centred box is wrong on a phone. */
   #palette { padding: 0; align-items: stretch; }

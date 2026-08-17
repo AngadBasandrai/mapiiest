@@ -18,6 +18,16 @@
 /data/*
   Cache-Control: public, max-age=600, must-revalidate
 
+# The service worker decides when everything else updates, so it must never be
+# the stale thing: a cached sw.js pins the whole app to an old precache list.
+/sw.js
+  Cache-Control: no-cache
+  Content-Type: text/javascript; charset=utf-8
+
+/manifest.webmanifest
+  Content-Type: application/manifest+json; charset=utf-8
+  Cache-Control: public, max-age=3600
+
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
