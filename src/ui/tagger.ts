@@ -30,6 +30,12 @@ export interface Tag {
   color?: string
   /** ISO date the tag was made, so an export says how old its rows are. */
   on: string
+  /**
+   * A tombstone for a committed place. Deleting something that shipped in
+   * places.json cannot remove it from the file, so it is recorded as retired
+   * here and left out of the map and the export.
+   */
+  deleted?: true
 }
 
 /**
@@ -54,6 +60,17 @@ const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) =>
 
 let tags: Tag[] = read()
 const listeners = new Set<() => void>()
+
+/**
+ * The places the build shipped, which local records edit on top of.
+ *
+ * Everything in data/curated/places.json is already on the map when you arrive,
+ * so "edit a tag" mostly means editing one of those — not one you made this
+ * session. A local record with the same id overrides it; the export writes the
+ * merged result, so a round trip through the editor reproduces the whole file.
+ */
+let base: Poi[] = []
+const isBase = (id: string) => base.some((p) => p.id === id)
 
 function read(): Tag[] {
   try {
@@ -81,24 +98,46 @@ function write() {
 }
 
 export function allTags(): Tag[] { return tags }
+/** How many committed places you have changed, plus how many you have added. */
 export function tagCount(): number { return tags.length }
 export function onTagsChange(fn: () => void) { listeners.add(fn) }
 
-/** Tags as POIs, so the map and the search index can treat them like any other. */
-export function tagPois(): Poi[] {
-  return tags.map((t) => ({
+function toPoi(t: Tag): Poi {
+  return {
     id: t.id,
     name: t.name,
     cat: t.cat,
     lat: t.lat,
     lon: t.lon,
     src: 'seed' as const,
-    desc: t.desc,
+    ...(t.desc ? { desc: t.desc } : {}),
     user: true as const,
     ...(t.poly?.length ? { poly: t.poly } : {}),
     ...(t.color ? { color: t.color } : {}),
-  }))
+  }
 }
+
+/**
+ * The shipped places with local edits applied: overrides replace, tombstones
+ * remove, and anything new is appended.
+ */
+export function applyEdits(basePois: Poi[]): Poi[] {
+  const pending = new Map(tags.map((t) => [t.id, t]))
+  const out: Poi[] = []
+  for (const p of basePois) {
+    const t = pending.get(p.id)
+    if (!t) { out.push(p); continue }
+    pending.delete(p.id)
+    if (t.deleted) continue
+    // Spread over the original so fields the editor does not touch survive.
+    out.push({ ...p, ...toPoi(t) })
+  }
+  for (const t of pending.values()) if (!t.deleted) out.push(toPoi(t))
+  return out
+}
+
+/** Everything currently on the map, shipped or local. */
+export function allPlaces(): Poi[] { return applyEdits(base) }
 
 export function getTag(id: string): Tag | undefined {
   return tags.find((t) => t.id === id)
@@ -121,14 +160,30 @@ let requestMove: ((id: string) => void) | null = null
 export function onRequestMovePoint(fn: (id: string) => void) { requestMove = fn }
 
 export function deleteTag(id: string) {
+  if (isBase(id)) {
+    // It lives in the committed file, so it can only be retired here — and the
+    // export leaves it out, which is what actually removes it.
+    const gone = base.find((p) => p.id === id)!
+    tags = [...tags.filter((t) => t.id !== id), {
+      id, name: gone.name, cat: gone.cat, lat: gone.lat, lon: gone.lon,
+      on: new Date().toISOString().slice(0, 10), deleted: true,
+    }]
+  } else {
+    tags = tags.filter((t) => t.id !== id)
+  }
+  write()
+}
+
+/** Put a retired or edited committed place back the way it shipped. */
+export function revertTag(id: string) {
   tags = tags.filter((t) => t.id !== id)
   write()
 }
 
-/** Wipe the lot. Confirms first — this is the one action here that loses work. */
+/** Discard every local change. Confirms — this is the one action that loses work. */
 export function clearAllTags(): boolean {
   if (!tags.length) { showTagList(); return false }
-  if (!confirm(`Delete all ${tags.length} tags from this browser? Export them first if you want to keep them.`)) {
+  if (!confirm(`Discard all ${tags.length} unsaved change(s) in this browser? The committed places stay as they are. Export first if you want to keep them.`)) {
     return false
   }
   tags = []
@@ -142,12 +197,29 @@ function slug(name: string) {
   return `${s || 'place'}-${Date.now().toString(36).slice(-4)}`
 }
 
-/** The exact shape `data/curated/places.json` expects, ready to paste in. */
+/**
+ * The whole of `data/curated/places.json`, ready to replace the file.
+ *
+ * Not just what changed: an edit to a committed place only means anything
+ * against the rest of them, and a retired one is removed by being absent. So
+ * the export is the merged result — paste it over the file wholesale.
+ */
 export function exportJson(): string {
+  const local = new Map(tags.map((t) => [t.id, t]))
   return JSON.stringify({
     _source: 'survey',
-    _note: 'Exported from the map’s tag mode. Check each row against reality before committing it.',
-    items: tags.map(({ on, ...rest }) => ({ ...rest, surveyed: on })),
+    _note: 'Exported from the map’s editor — the full set, meant to replace this file. Check each row against reality before committing it.',
+    items: applyEdits(base).map((p) => ({
+      id: p.id,
+      name: p.name,
+      cat: p.cat,
+      lat: p.lat,
+      lon: p.lon,
+      ...(p.poly?.length ? { poly: p.poly } : {}),
+      ...(p.color ? { color: p.color } : {}),
+      ...(p.desc ? { desc: p.desc } : {}),
+      surveyed: local.get(p.id)?.on ?? (p as { surveyed?: string }).surveyed,
+    })),
   }, null, 2)
 }
 
@@ -158,6 +230,7 @@ let onDone: (() => void) | null = null
 
 export function initTagger(c: Campus) {
   campus = c
+  base = c.pois
 
   const panel = document.getElementById('panel')!
   panel.addEventListener('click', (e) => {
@@ -169,6 +242,8 @@ export function initTagger(c: Campus) {
     if (t.closest('[data-tag-export]')) { download(); return }
     if (t.closest('[data-tag-copy]')) { copy(t.closest('[data-tag-copy]') as HTMLElement); return }
     if (t.closest('[data-tag-clear]')) { clearAllTags(); return }
+    const revert = t.closest('[data-tag-revert]') as HTMLElement | null
+    if (revert) { revertTag(revert.dataset.tagRevert!); showTagList(); return }
     const move = t.closest('[data-tag-move]') as HTMLElement | null
     if (move) { requestMove?.(move.dataset.tagMove!); return }
     const edit = t.closest('[data-tag-edit]') as HTMLElement | null
@@ -275,11 +350,21 @@ export function showTagForm(
 
 /** Open the form for something already tagged, to change or delete it. */
 export function showEditForm(id: string, done?: () => void) {
-  const t = tags.find((x) => x.id === id)
+  // A local record if there is one, otherwise the place as it shipped — the
+  // second case is the common one, since the map arrives already full.
+  const local = tags.find((x) => x.id === id)
+  const shipped = base.find((p) => p.id === id)
+  const t: Partial<Tag> | undefined = local ?? (shipped && {
+    id: shipped.id, name: shipped.name, cat: shipped.cat,
+    lat: shipped.lat, lon: shipped.lon, desc: shipped.desc,
+    poly: shipped.poly, color: shipped.color,
+  })
   if (!t) return
-  pending = { id: t.id, lat: t.lat, lon: t.lon, ...(t.poly ? { poly: t.poly } : {}) }
+
+  pending = { id: t.id!, lat: t.lat!, lon: t.lon!, ...(t.poly ? { poly: t.poly } : {}) }
   onDone = done ?? null
-  form('Edit place', t.poly?.length ? `outline · ${t.poly.length} points` : 'point', t)
+  const what = t.poly?.length ? `outline · ${t.poly.length} points` : 'point'
+  form('Edit place', local ? `${what} · changed here` : `${what} · as committed`, t)
 }
 
 function save() {
@@ -311,7 +396,10 @@ function save() {
     on: existing?.on ?? new Date().toISOString().slice(0, 10),
   }
 
-  tags = pending.id ? tags.map((t) => (t.id === pending!.id ? next : t)) : [...tags, next]
+  // Replace-or-append, rather than map-in-place. Editing a committed place has
+  // an id but no local record yet — mapping over the list would find nothing to
+  // replace and the edit would vanish without a word.
+  tags = [...tags.filter((t) => t.id !== next.id), next]
   pending = null
   write()
   showTagList()
@@ -325,31 +413,56 @@ function hide() {
 }
 
 export function showTagList() {
-  const rows = tags.length
-    ? tags.map((t) => `
-        <div class="tag-row">
-          <span class="dot" style="background:${t.color ?? campus.categories[t.cat]?.color ?? '#8b949e'}"></span>
-          <span class="tag-main">
-            <b>${esc(t.name)}</b>
-            <em>${esc(campus.categories[t.cat]?.label ?? t.cat)}${t.poly?.length ? ' · area' : ''} · ${esc(t.on)}</em>
-          </span>
-          <button class="linkish" data-tag-edit="${esc(t.id)}" aria-label="Edit ${esc(t.name)}">edit</button>
-          <button data-tag-del="${esc(t.id)}" aria-label="Delete ${esc(t.name)}">&times;</button>
-        </div>`).join('')
-    : `<p class="p-note">No tags yet. Turn on tag mode in the top bar, then tap
-       anywhere on the map.</p>`
+  const local = new Map(tags.map((t) => [t.id, t]))
+  const places = applyEdits(base)
+  const retired = tags.filter((t) => t.deleted)
+  const changed = tags.length
 
-  panelShell('My tags', `${tags.length} in this browser`, `
-    ${rows}
-    ${tags.length ? `<div class="p-actions" style="margin-top:14px">
-      <button data-tag-export>Download JSON</button>
+  const row = (p: Poi) => {
+    const t = local.get(p.id)
+    return `
+      <div class="tag-row">
+        <span class="dot" style="background:${p.color ?? campus.categories[p.cat]?.color ?? '#8b949e'}"></span>
+        <span class="tag-main">
+          <b>${esc(p.name)}</b>
+          <em>${esc(campus.categories[p.cat]?.label ?? p.cat)}${p.poly?.length ? ' · area' : ''}${
+            t ? (isBase(p.id) ? ' · changed' : ' · added') : ''}</em>
+        </span>
+        <button class="linkish" data-tag-edit="${esc(p.id)}" aria-label="Edit ${esc(p.name)}">edit</button>
+        ${t && isBase(p.id)
+          ? `<button class="linkish" data-tag-revert="${esc(p.id)}" aria-label="Revert ${esc(p.name)}">revert</button>`
+          : ''}
+        <button data-tag-del="${esc(p.id)}" aria-label="Delete ${esc(p.name)}">&times;</button>
+      </div>`
+  }
+
+  const retiredRows = retired.map((t) => `
+    <div class="tag-row gone">
+      <span class="dot"></span>
+      <span class="tag-main"><b>${esc(t.name)}</b><em>retired — left out of the export</em></span>
+      <button class="linkish" data-tag-revert="${esc(t.id)}">restore</button>
+    </div>`).join('')
+
+  panelShell('Places', `${places.length} on the map · ${changed} changed here`, `
+    ${changed
+      ? `<p class="p-note"><b>${changed}</b> change(s) live in this browser only.
+         Export replaces the whole of <code>data/curated/places.json</code>, so
+         a paste and a rebuild makes them everyone's.</p>`
+      : `<p class="p-note">Nothing changed yet. Edit any place below, or tap one
+         on the map with the surveying tool on.</p>`}
+
+    ${changed ? `<div class="p-actions">
+      <button data-tag-export class="primary">Download places.json</button>
       <button data-tag-copy>Copy</button>
-    </div>
-    <p class="p-note">Paste the <code>items</code> array into
-    <code>data/curated/places.json</code> and rebuild, and these become part of
-    the map for everyone — with the build checking each one falls inside the
-    campus boundary.</p>
-    <div class="p-actions"><button data-tag-clear class="danger">Delete all ${tags.length} tags</button></div>` : ''}`)
+    </div>` : ''}
+
+    ${retiredRows}
+    <div class="p-sec">On the map</div>
+    ${places.map(row).join('')}
+
+    ${changed ? `<div class="p-actions" style="margin-top:14px">
+      <button data-tag-clear class="danger">Discard all ${changed} change(s)</button>
+    </div>` : ''}`)
 }
 
 function download() {

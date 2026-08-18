@@ -366,6 +366,103 @@ async function check(name, width, height, theme) {
   ok(afterBrandClick.tag === 'DIV' && !afterBrandClick.panelOpen,
      'the wordmark is inert', `<${afterBrandClick.tag?.toLowerCase()}> panel=${afterBrandClick.panelOpen}`)
 
+  /* ── editing what already shipped ───────────────────────────────────── */
+
+  // The map arrives with every committed place already on it, so "edit a tag"
+  // almost always means changing one of those rather than one made this
+  // session. Both halves of that were broken once and neither said so: saving
+  // an edit to a committed place stored nothing, and stored edits were ignored
+  // until something else happened to redraw the map.
+  await page.keyboard.press('Escape')
+  {
+    const target = PLACE.name
+    await page.keyboard.down('Control'); await page.keyboard.press('KeyK'); await page.keyboard.up('Control')
+    await page.waitForFunction(() => !document.getElementById('palette').hidden, { timeout: 4000 })
+    await page.type('#palette-input', target, { delay: 6 })
+    await page.waitForFunction(() => document.querySelectorAll('#palette-results .row').length > 0,
+      { timeout: 4000 }).catch(() => {})
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(() => !document.getElementById('panel').hidden, { timeout: 4000 })
+
+    const canEdit = await page.$('#panel [data-tag-edit]') !== null
+    ok(canEdit, 'a committed place offers Edit on its panel')
+
+    if (canEdit) {
+      await page.click('#panel [data-tag-edit]')
+      const opened = await page.waitForSelector('#tag-name', { timeout: 4000 })
+        .then(() => true).catch(() => false)
+      const prefill = await page.evaluate(() => ({
+        name: document.getElementById('tag-name')?.value,
+        kind: document.querySelector('#panel .p-kind')?.textContent ?? '',
+      }))
+      ok(opened && prefill.name === target, 'the form is prefilled from the committed file',
+         `${prefill.name} · ${prefill.kind}`)
+
+      const renamed = `${target} EDITED`
+      await page.evaluate(() => { document.getElementById('tag-name').value = '' })
+      await page.type('#tag-name', renamed, { delay: 4 })
+      await page.click('[data-tag-save]')
+      await new Promise((r) => setTimeout(r, 700))
+
+      const after = await page.evaluate((names) => {
+        const f = window.__map.getSource('pois')._data.features
+        return {
+          renamed: f.some((x) => x.properties.name === names.renamed),
+          oldGone: !f.some((x) => x.properties.name === names.target),
+          // Exact matches only: a prefix test would count "… Mess" as a copy
+          // of "…", which is a different place entirely.
+          copies: f.filter((x) => x.properties.name === names.renamed).length,
+          records: JSON.parse(localStorage.getItem('campusmap.tags.v1') || '[]').length,
+        }
+      }, { target, renamed })
+      ok(after.renamed && after.oldGone, 'editing a committed place changes it on the map')
+      ok(after.copies === 1, 'exactly once, with no duplicate left behind', `${after.copies} copies`)
+      ok(after.records === 1, 'stored as one local override', `${after.records} records`)
+
+      // The half that a reload used to lose.
+      await page.reload({ waitUntil: 'networkidle2' })
+      await page.waitForFunction(() => document.getElementById('boot')?.classList.contains('gone'),
+        { timeout: 20_000 })
+      const survived = await page.evaluate((n) =>
+        window.__map.getSource('pois')._data.features.some((x) => x.properties.name === n), renamed)
+      ok(survived, 'and the edit is still there after a reload')
+
+      // Export is the whole file, not just what changed — that is what makes an
+      // edit committable at all.
+      const exported = await page.evaluate(async () => {
+        await new Promise((r) => setTimeout(r, 300))
+        const rows = [...document.querySelectorAll('#palette-results .row')]
+        void rows
+        let blob = null
+        const origUrl = URL.createObjectURL
+        const origClick = HTMLAnchorElement.prototype.click
+        URL.createObjectURL = (b) => { blob = b; return 'blob:stub' }
+        HTMLAnchorElement.prototype.click = function () {}
+        window.__openTagList?.()
+        const btn = document.querySelector('[data-tag-export]')
+        if (btn) btn.click()
+        URL.createObjectURL = origUrl
+        HTMLAnchorElement.prototype.click = origClick
+        return blob ? await blob.text() : null
+      })
+      if (exported) {
+        const parsed = JSON.parse(exported)
+        const hit = parsed.items.find((i) => i.name === renamed)
+        ok(parsed.items.length === campus.pois.length,
+           'the export is the whole file, not just the change',
+           `${parsed.items.length} of ${campus.pois.length}`)
+        ok(!!hit, 'with the edit applied in place')
+      } else {
+        ok(false, 'the export could be captured')
+      }
+
+      await page.evaluate(() => localStorage.removeItem('campusmap.tags.v1'))
+      await page.reload({ waitUntil: 'networkidle2' })
+      await page.waitForFunction(() => document.getElementById('boot')?.classList.contains('gone'),
+        { timeout: 20_000 })
+    }
+  }
+
   /* ── outlines ──────────────────────────────────────────────────────── */
 
   // The whole point of a building: an area, tinted, with no dot and no label,
@@ -458,13 +555,40 @@ async function check(name, width, height, theme) {
       ok(drawn.stored?.poly?.length >= 3, 'both the outline and the marker are stored',
          `${drawn.stored?.poly?.length} outline points`)
 
-      // A corner, not the middle: the whole area is the target.
+      // Somewhere inside the outline that is not the marker and not any other
+      // place's dot — the point being that bare area is live, not just the pin.
       await page.keyboard.press('Escape')
-      await page.mouse.click(ox + 80, oy + 8)
-      await new Promise((r) => setTimeout(r, 600))
-      const opened = await page.evaluate(() =>
-        document.querySelector('#panel h2')?.textContent ?? '')
-      ok(opened === 'Verify Block', 'clicking anywhere inside it opens it', opened || 'nothing')
+      const bare = await page.evaluate(() => {
+        const m = window.__map
+        const ring = m.getSource('areas')._data.features
+          .find((f) => f.properties.id?.startsWith('verify-block')).geometry.coordinates[0]
+        const pts = ring.map((c) => m.project(c))
+        const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y)
+        const inside = (x, y) => {
+          let hit = false
+          for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const a = pts[i], b = pts[j]
+            if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) hit = !hit
+          }
+          return hit
+        }
+        for (let x = Math.min(...xs) + 4; x < Math.max(...xs) - 4; x += 5) {
+          for (let y = Math.min(...ys) + 4; y < Math.max(...ys) - 4; y += 5) {
+            if (!inside(x, y)) continue
+            if (m.queryRenderedFeatures([x, y], { layers: ['poi-dot'] }).length) continue
+            return { x: Math.round(x), y: Math.round(y) }
+          }
+        }
+        return null
+      })
+      ok(!!bare, 'the outline has area that is not covered by a dot')
+      if (bare) {
+        await page.mouse.click(bare.x, bare.y)
+        await new Promise((r) => setTimeout(r, 600))
+        const opened = await page.evaluate(() =>
+          document.querySelector('#panel h2')?.textContent ?? '')
+        ok(opened === 'Verify Block', 'clicking bare area inside it opens it', opened || 'nothing')
+      }
 
       // And the marker can be moved later without touching the outline.
       await page.click('#tag-btn')

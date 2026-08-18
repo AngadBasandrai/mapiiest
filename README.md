@@ -80,10 +80,21 @@ cannot tell one from the next — a scheme of eight muted tints does, picked in
 the form. They are muted on purpose: a fill sits at a fifth opacity over the
 photograph, and a saturated one buries the roof under it.
 
-Tags live in this browser's localStorage and nowhere else — there is no server,
-so what you add is yours until you export it. `My tags` in `Ctrl K` lists them
-with edit and delete, and exports the set as JSON in exactly the
-`data/curated/places.json` shape.
+**Every place is editable, including the ones already committed.** The map
+arrives with all of `data/curated/places.json` on it, so editing usually means
+changing one of those rather than one you made this session: tap it with the
+tool on, or press **Edit** on its panel. A local record overrides the committed
+one; deleting a committed place retires it rather than pretending the file
+changed; **revert** puts it back the way it shipped.
+
+Those records live in this browser's localStorage and nowhere else — there is no
+server, so changes are yours until you export them. `My tags` in `Ctrl K` lists
+every place with edit, revert and delete.
+
+**The export is the whole file**, not a diff: an edit only means anything
+against the rest of the set, and a retired place is removed by being absent. So
+it replaces `data/curated/places.json` wholesale — paste, rebuild, and the
+changes are everyone's.
 
 The build validates what comes back: an outline needs at least three points,
 each a finite `[lon, lat]` pair inside the campus boundary, and it closes the

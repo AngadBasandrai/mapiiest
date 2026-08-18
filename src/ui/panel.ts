@@ -69,12 +69,12 @@ function hoursRow(spec?: string): string | undefined {
  * whatever Google's index thinks it means, the coordinates are the surveyed
  * spot.
  */
-function actions(lat: number, lon: number, tagId?: string) {
+function actions(lat: number, lon: number, id: string) {
   const dest = `${lat.toFixed(6)},${lon.toFixed(6)}`
   return `<div class="p-actions">
     <a class="primary" target="_blank" rel="noopener"
        href="https://www.google.com/maps/dir/?api=1&amp;destination=${dest}">Route in Google Maps</a>
-    ${tagId ? `<button data-tag-del="${esc(tagId)}" class="danger">Delete tag</button>` : ''}
+    <button data-tag-edit="${esc(id)}">Edit</button>
   </div>`
 }
 
@@ -87,9 +87,9 @@ export function showPoi(p: Poi) {
     : p.wheelchair === 'no' ? 'not step-free' : undefined
 
   const body = [
-    // A tag you can see on the map is a tag you should be able to delete from
-    // there, without first hunting for it in a list.
-    actions(p.lat, p.lon, p.user ? p.id : undefined),
+    // Whatever you are looking at is what you want to correct, so the way in
+    // is here rather than somewhere you have to go and find it.
+    actions(p.lat, p.lon, p.id),
     kv([
       ['Hours', hoursRow(p.hours)],
       ['Access', wheel ? esc(wheel) : undefined],
@@ -109,8 +109,8 @@ export function showPoi(p: Poi) {
     // reached in a build — the guard is what keeps its wording out of the
     // bundle, rather than shipping dead text about a feature the site lacks.
     p.user
-      ? `<p class="src">Your tag, saved in this browser only. See them all in
-         <button data-tag-list class="linkish">My tags</button>, or
+      ? `<p class="src">Changed in this browser and not yet committed. See every
+         change in <button data-tag-list class="linkish">My tags</button>, or
          <a href="https://www.openstreetmap.org/edit#map=19/${p.lat.toFixed(5)}/${p.lon.toFixed(5)}"
             target="_blank" rel="noopener">put it on OpenStreetMap →</a></p>`
       : `<p class="src">${p.src === 'osm'

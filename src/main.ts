@@ -30,15 +30,15 @@ async function start() {
   let counts: Record<string, number> = {}
 
   /**
-   * Places from the in-browser tagger, which exists in a dev build only. The
-   * survey it was built for is finished and committed to data/curated, so the
-   * published site has no way to add or remove anything — it just shows what
-   * the build produced.
-   */
-  let taggedPois: () => Poi[] = () => []
+    * The committed places with local edits applied. Everything in
+    * data/curated/places.json is on the map before you touch anything, so
+    * editing mostly means changing one of those rather than one you made this
+    * session — the editor keeps those changes here until you export them.
+    */
+  let mergePlaces: (base: Poi[]) => Poi[] = (b) => b
 
   function refreshPoiList() {
-    pois = [...campus.pois, ...taggedPois()]
+    pois = mergePlaces(campus.pois)
     byId = new Map(pois.map((p) => [p.id, p]))
     counts = {}
     for (const p of pois) counts[p.cat] = (counts[p.cat] ?? 0) + 1
@@ -355,7 +355,7 @@ async function start() {
   {
     const tagger = await import('./ui/tagger')
     tagger.initTagger(campus)
-    taggedPois = tagger.tagPois
+    mergePlaces = tagger.applyEdits
 
     let tagMode = false
     let tool: 'point' | 'area' = 'point'
@@ -518,6 +518,11 @@ async function start() {
       paintTagBar()
     })
 
+    // Handle for scripts/verify-browser.mjs, alongside __map: the list is
+    // otherwise only reachable by typing into search, which ranks a fuzzy place
+    // match above it and makes the test about ranking instead of about editing.
+    ;(window as unknown as { __openTagList: () => void }).__openTagList = () => tagger.showTagList()
+
     devActions['tag-mode'] = () => setTagMode(!tagMode)
     devActions['tags'] = () => tagger.showTagList()
     devActions['tags-clear'] = () => tagger.clearAllTags()
@@ -543,9 +548,11 @@ async function start() {
 
       // Tapping something of your own edits it rather than stacking a second
       // place on top — which is what you meant every time.
+      // Anything on the map can be edited — the committed places most of all,
+      // since they are what is already here.
       const hit = map.queryRenderedFeatures(e.point, { layers: ['poi-dot', 'place-fill'] })[0]
       const existing = hit?.properties?.id ? byId.get(hit.properties.id as string) : undefined
-      if (existing?.user) { tagger.showEditForm(existing.id, () => setTagMode(false)); return }
+      if (existing) { tagger.showEditForm(existing.id, () => setTagMode(false)); return }
 
       const under = map.queryRenderedFeatures(e.point, { layers: ['building'] })[0]
       tagger.showTagForm(e.lngLat.lat, e.lngLat.lng,
@@ -556,7 +563,7 @@ async function start() {
     // Categories that had something in them last time the map was painted.
     let known = new Set(Object.keys(counts))
 
-    tagger.onTagsChange(() => {
+    function applyEdits() {
       refreshPoiList()
       // Switch on a category the first time it gains a member, so a tag is
       // never saved into an invisible layer — but leave the rest of the
@@ -569,7 +576,15 @@ async function start() {
       paintRail()
       refreshPois()
       paintTagBtn()
-    })
+    }
+
+    tagger.onTagsChange(applyEdits)
+
+    // Edits made in an earlier visit are already in storage by the time this
+    // module loads, which is after the first paint — without this the map would
+    // show the committed places until something else happened to redraw it, and
+    // your own changes would look like they had been lost.
+    if (tagger.tagCount()) applyEdits()
 
     // The draft lives in the style, so a theme switch has to refill it.
     onThemeChange(() => setTimeout(paintDraft, 0))
