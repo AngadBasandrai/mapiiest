@@ -58,48 +58,45 @@ MapLibre drops a failed raster tile silently — no error event, nothing in the
 console — so the page has no way to notice on its own. The worker is the only
 thing that sees the failed request, so it posts a message to the page.
 
-### Surveying
+### Surveying (development only)
 
-The button beside the search bar turns on the surveying tool, with two ways to
-mark something:
+The places on this map were put there by hand, with a tool built into the app:
+turn on the pin button, then either
 
-- **point** — tap a spot. Tapping a place of your own opens it for editing
-  instead of stacking a second one on top.
-- **area** — tap the corners, then *finish*, then tap where the **marker**
-  goes. Three corners minimum; *undo* drops the last one.
+- **point** — tap a spot, or tap a place to edit it; or
+- **area** — tap the corners, *finish*, then tap where the **marker** goes.
 
-The outline and the marker are separate things, chosen separately. An outline
-says what a place occupies; the marker says where its dot belongs — the door,
-the counter, the end of the jetty — which is rarely the middle of the shape. For
-a building the marker is never drawn, so *use centre* skips that step. **Move
-marker** on an existing place moves the dot and leaves the outline untouched.
+An outline and a marker are separate things. The outline is what a place
+occupies; the marker is where its dot belongs — the door, the counter, the end
+of the jetty — which is rarely the middle of the shape. An outline defaults to
+the **Buildings** category, drawn as a tinted area with no dot and no label,
+since the departments inside it carry the names; a scheme of eight muted tints
+tells one building from the next.
 
-An outline defaults to the **Buildings** category, which is drawn as an area and
-nothing else. Every building shares that one category, so the category colour
-cannot tell one from the next — a scheme of eight muted tints does, picked in
-the form. They are muted on purpose: a fill sits at a fifth opacity over the
-photograph, and a saturated one buries the roof under it.
+Every place is editable, including the ones already committed: a local record
+overrides the shipped one, deleting retires it, and **revert** puts it back. The
+export is therefore the whole of `data/curated/places.json`, not a diff — paste
+it over the file, rebuild, and the build checks every row and every outline
+point falls inside the campus boundary.
 
-**Every place is editable, including the ones already committed.** The map
-arrives with all of `data/curated/places.json` on it, so editing usually means
-changing one of those rather than one you made this session: tap it with the
-tool on, or press **Edit** on its panel. A local record overrides the committed
-one; deleting a committed place retires it rather than pretending the file
-changed; **revert** puts it back the way it shipped.
+**None of that is part of the published site.** The survey is finished and
+committed, so nothing on the live map can add, change or remove a place: the
+button, the toolbar, the commands, the edit controls and the module behind them
+are all dropped from a production build, guarded by `import.meta.env.DEV` in
+`src/main.ts`. The guard is a dynamic `import()` rather than a flag around a
+static one, for two reasons — a static import would keep the module in the
+bundle no matter what, since it touches `localStorage` as it loads; and an
+`await` on that import in the production path is what once made the map's `load`
+event fire before its own handler on a warm start.
 
-Those records live in this browser's localStorage and nowhere else — there is no
-server, so changes are yours until you export them. `My tags` in `Ctrl K` lists
-every place with edit, revert and delete.
+`npm run dev` still has the whole tool, for the next survey. `npm run build` has
+no trace of it: one JS chunk instead of two, and none of its strings. The smoke
+and browser tests both assert that.
 
-**The export is the whole file**, not a diff: an edit only means anything
-against the rest of the set, and a retired place is removed by being absent. So
-it replaces `data/curated/places.json` wholesale — paste, rebuild, and the
-changes are everyone's.
-
-The build validates what comes back: an outline needs at least three points,
-each a finite `[lon, lat]` pair inside the campus boundary, and it closes the
-ring for you. An area drawn without a point gets its centroid, so it still has
-somewhere for search results and the panel to fly to.
+To add or correct a place now, edit `data/curated/places.json` directly — or run
+the dev server, edit there, and paste the export back. Anything real and
+permanent is better off in OpenStreetMap itself; every form links straight into
+the OSM editor at that spot.
 
 ## How it is built
 

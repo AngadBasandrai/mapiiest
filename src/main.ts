@@ -362,13 +362,18 @@ async function start() {
   /* ── surveying ────────────────────────────────────────────────────────── */
 
   /**
-   * The tool the campus is surveyed with: mark a point, or trace an outline,
-   * name it, and export the lot into data/curated/places.json.
+   * The tool the campus was surveyed with: mark a point, or trace an outline,
+   * name it, and export the lot into data/curated/places.json. That survey is
+   * done and committed, so it has no business on the published site — this
+   * whole block and the module it pulls in are dropped from a production build.
    *
-   * Tags live in this browser's localStorage and nowhere else — there is no
-   * server, so what you add here is yours until you export it and commit it.
+   * The dynamic import is what makes that true: a static one would keep the
+   * module in the bundle whatever the guard said, since it touches localStorage
+   * as it loads. It also keeps the await out of the production path, which is
+   * where it caused the map's `load` event to fire before its own handler on a
+   * warm start.
    */
-  {
+  if (import.meta.env.DEV) {
     const tagger = await import('./ui/tagger')
     tagger.initTagger(campus)
     mergePlaces = tagger.applyEdits

@@ -74,7 +74,7 @@ function actions(lat: number, lon: number, id: string) {
   return `<div class="p-actions">
     <a class="primary" target="_blank" rel="noopener"
        href="https://www.google.com/maps/dir/?api=1&amp;destination=${dest}">Route in Google Maps</a>
-    <button data-tag-edit="${esc(id)}">Edit</button>
+    ${import.meta.env.DEV ? `<button data-tag-edit="${esc(id)}">Edit</button>` : ''}
   </div>`
 }
 

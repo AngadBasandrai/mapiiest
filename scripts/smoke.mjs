@@ -202,14 +202,16 @@ ok(!index.search('mess menu today').some((h) => h.kind === 'place' && /menu/i.te
 ok(index.examples().length > 0, 'the empty state suggests something real',
    index.examples().join(', '))
 
-// Surveying is part of the app again, so its commands have to be reachable
-// from search — the toolbar button is not the only way in.
-for (const title of ['Tag mode', 'My tags', 'Delete all my tags']) {
-  ok(index.search(title).some((h) => h.kind === 'action' && h.title === title),
-     `"${title}" is reachable from search`)
+// Surveying is how this map was made, not something the published site offers.
+// This index is bundled with DEV false, so anything here reaching it means the
+// guard leaked and the tool shipped.
+const devCommands = index.docs.filter((d) => d.kind === 'action' && /^do:tag/.test(d.id))
+ok(devCommands.length === 0, 'no tagging commands in a production build',
+   devCommands.map((d) => d.title).join(', '))
+for (const q of ['tag', 'tag mode', 'my tags', 'delete all my tags', 'edit']) {
+  const hits = index.search(q).filter((h) => h.kind === 'action' && /tag/i.test(h.title))
+  ok(hits.length === 0, `"${q}" surfaces no tagging command`, hits.map((h) => h.title).join(', '))
 }
-const tagCmds = index.search('tag').filter((h) => h.kind === 'action')
-ok(tagCmds.length > 0, '"tag" surfaces a tagging command', tagCmds.map((h) => h.title).join(', '))
 
 // The switch that keeps OSM-derived places out is unrelated and still holds.
 ok(campus.pois.every((p) => p.src === 'seed'), 'still nothing derived from an OSM tag')

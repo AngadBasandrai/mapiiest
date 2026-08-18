@@ -238,7 +238,9 @@ export class SearchIndex {
     ]
     const out = wanted.filter(([cat]) => counts[cat]).map(([, word]) => word)
     // Nothing on the map: suggest the commands, which always exist.
-    if (!out.length) return ['tag mode', 'satellite', 'my tags']
+    if (!out.length) {
+      return import.meta.env.DEV ? ['tag mode', 'satellite', 'my tags'] : ['satellite']
+    }
     return out.slice(0, 6)
   }
 }
@@ -293,5 +295,5 @@ const ACTIONS: Action[] = [
   { id: 'imagery', title: 'Satellite imagery', sub: 'Aerial photo under the map', words: 'satellite aerial imagery photo google maps earth view real' },
   { id: 'layers-all', title: 'Show every layer', sub: 'Turn all categories on', words: 'all layers everything show' },
   { id: 'layers-none', title: 'Hide every layer', sub: 'Clear the map', words: 'none clear hide reset layers' },
-  ...DEV_ACTIONS,
+  ...(import.meta.env.DEV ? DEV_ACTIONS : []),
 ]
