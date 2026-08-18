@@ -1011,8 +1011,8 @@
       "surveyed": "2026-08-18"
     },
     {
-      "id": "hostel-7-zm24",
-      "name": "Hostel 7",
+      "id": "hostel-11-zm24",
+      "name": "Hostel 11",
       "cat": "hostel",
       "lat": 22.556553,
       "lon": 88.301957,
@@ -1729,8 +1729,8 @@
       "surveyed": "2026-08-18"
     },
     {
-      "id": "sen-hall-fof4",
-      "name": "Sen Hall",
+      "id": "sengupta-hall-fof4",
+      "name": "Sengupta Hall",
       "cat": "hostel",
       "lat": 22.555999,
       "lon": 88.310319,
