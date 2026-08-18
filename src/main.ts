@@ -94,6 +94,22 @@ async function start() {
     pitchWithRotate: false,
   })
   map.touchZoomRotate.disableRotation()
+
+  /**
+   * `load` fires once and is gone. Everything that waits for it is set up
+   * further down, past an `await` for the surveying module — and on a real
+   * network that chunk is a round trip, which is long enough for the map to
+   * finish loading first. The listener would then be attached to an event that
+   * already happened, and the boot overlay would sit there until it timed out
+   * with "the map did not finish loading" over a map that had loaded fine.
+   * Localhost resolves the import too fast to ever show it.
+   *
+   * So latch it here, next to the map, and let `whenMapReady` fire immediately
+   * for anyone who turns up late.
+   */
+  let mapReady = false
+  map.once('load', () => { mapReady = true })
+  const whenMapReady = (fn: () => void) => { if (mapReady) fn(); else map.once('load', fn) }
   // Handle for scripts/verify-browser.mjs and for poking at the map in devtools.
   ;(window as unknown as { __map: maplibregl.Map }).__map = map
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
@@ -651,7 +667,7 @@ async function start() {
     console.error('[map]', msg)
   })
 
-  map.on('load', () => {
+  whenMapReady(() => {
     clearTimeout(bootTimer)
     // The imagery layer only exists once the style is up.
     applyImagery(map, imagery, resolved())

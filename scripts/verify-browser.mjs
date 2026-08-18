@@ -794,9 +794,70 @@ async function checkOfflineApp() {
   await page.close()
 }
 
+/**
+ * A second visit, with the service worker already controlling the page.
+ *
+ * This is the one that matters, and the one every other check misses. On a cold
+ * localhost load the map takes longer to come up than a dynamic `import()`
+ * takes to resolve, so anything registered after that import still catches the
+ * map's `load` event. Warm, it is the other way round: every asset comes from
+ * the cache, the style is up within a few milliseconds, and an `import()` still
+ * costs at least a macrotask — so `load` fires before its own listener exists,
+ * and never fires again.
+ *
+ * That shipped. The live site sat at "the map did not finish loading" over a
+ * map that had loaded perfectly, with its places built and its legend drawn,
+ * because one handler was attached a tick too late.
+ */
+async function checkWarmStart() {
+  console.log('\nwarm start (service worker controlling)')
+  const page = await browser.newPage()
+  await page.setViewport({ width: 1440, height: 900 })
+
+  // First visit: register the worker and let it precache.
+  await page.goto(URL_, { waitUntil: 'networkidle2', timeout: 60_000 })
+  const controlled = await page.waitForFunction(
+    () => navigator.serviceWorker?.controller != null, { timeout: 20_000 },
+  ).then(() => true).catch(() => false)
+  ok(controlled, 'the worker takes control on the first visit')
+
+  // Second visit: every asset from the worker's cache, which is the condition
+  // the map's `load` race needs — warm, the style is up within a few
+  // milliseconds while a dynamic import() still costs a macrotask.
+  //
+  // Worth being straight about what this does and does not prove. It exercises
+  // a fully cached load, which nothing else here did. It does not force the
+  // ordering: request interception cannot reach a worker-served response, so
+  // the chunk cannot be held back from out here, and on a fast local disk the
+  // map may still lose. The environment that actually failed was the deployed
+  // site, so that is what gates this — `npm run verify -- --url https://…`.
+  const errors = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.reload({ waitUntil: 'networkidle2', timeout: 60_000 })
+
+  const booted = await page.waitForFunction(
+    () => document.getElementById('boot')?.classList.contains('gone'),
+    { timeout: 20_000 },
+  ).then(() => true).catch(() => false)
+  const state = await page.evaluate(() => ({
+    boot: document.getElementById('boot')?.textContent?.trim().slice(0, 60) ?? '',
+    pins: window.__map?.getSource('pois')?._data?.features?.length ?? -1,
+    chips: document.querySelectorAll('#layer-chips .chip').length,
+  }))
+
+  ok(booted, 'the map finishes loading on a warm start', booted ? '' : `boot says: "${state.boot}"`)
+  // The giveaway when it went wrong: the legend was built from the same list
+  // the map draws from, so chips without pins means the draw never happened.
+  ok(state.pins > 0, `and draws its places (${state.pins} pins, ${state.chips} chips)`)
+  ok(errors.length === 0, 'with no page errors', errors.slice(0, 2).join(' | '))
+
+  await page.close()
+}
+
 await check('desktop-dark', 1440, 900, 'dark')
 await check('desktop-light', 1440, 900, 'light')
 await check('mobile-dark', 402, 874, 'dark')
+await checkWarmStart()
 await checkOfflineApp()
 
 await browser.close()
