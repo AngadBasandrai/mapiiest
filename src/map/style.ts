@@ -8,48 +8,28 @@ import type { StyleSpecification } from 'maplibre-gl'
  * Label glyphs are served from public/font too, rather than a demo CDN that can
  * 404 the fontstack and take every label on the map with it.
  */
-const PALETTE = {
-  dark: {
-    bg: '#0b0d10',
-    campus: '#10141a',
-    green: '#121c15',
-    water: '#0e2230',
-    building: '#181d25',
-    buildingEdge: '#232a35',
-    named: '#1d2430',
-    road: '#2a313d',
-    roadCase: '#171b22',
-    path: '#2e3743',
-    steps: '#3a4250',
-    wall: '#1c222b',
-    boundary: '#28303c',
-    label: '#9aa4b2',
-    labelHalo: '#0b0d10',
-    dotStroke: '#0b0d10',
-    focus: '#58a6ff',
-  },
-  // Deliberately not a white map. The campus is a warm paper tone, buildings a
-  // half-step darker, and roads the only near-white — so the built area reads
-  // without any large field of pure white to stare into.
-  light: {
-    bg: '#dfe3e8',
-    campus: '#f4f2ee',
-    green: '#e2ebdc',
-    water: '#cfe0ec',
-    building: '#e6e3dd',
-    buildingEdge: '#d3cfc7',
-    named: '#ddd8cf',
-    road: '#fdfdfc',
-    roadCase: '#dcd8d1',
-    path: '#fbfaf8',
-    steps: '#b6b1a8',
-    wall: '#e0dcd4',
-    boundary: '#c2beb6',
-    label: '#4a5058',
-    labelHalo: '#f4f2ee',
-    dotStroke: '#fdfdfc',
-    focus: '#1f6feb',
-  },
+/**
+ * One palette. The map used to carry a light twin and a toggle between them,
+ * which cost a second set of every colour here, a dimmed derivation of all 39
+ * category colours in src/main.ts, and a `setStyle` round trip on every switch.
+ * It is a map that is looked at over aerial photography, which is dark; the
+ * light theme was the one nobody used.
+ */
+const C = {
+  bg: '#0b0d10',
+  campus: '#10141a',
+  green: '#121c15',
+  water: '#0e2230',
+  road: '#2a313d',
+  roadCase: '#171b22',
+  path: '#2e3743',
+  steps: '#3a4250',
+  wall: '#1c222b',
+  boundary: '#28303c',
+  label: '#9aa4b2',
+  labelHalo: '#0b0d10',
+  dotStroke: '#0b0d10',
+  focus: '#58a6ff',
 } as const
 
 /** Must match a directory under public/font. */
@@ -76,13 +56,10 @@ export const IMAGERY = {
 
 export function buildStyle(
   geo: Record<string, GeoJSON.FeatureCollection>,
-  theme: 'light' | 'dark' = 'dark',
   base = '/',
   /** Phone-sized viewport: fewer, smaller labels and tighter marks. */
   compact = false,
 ): StyleSpecification {
-  const C = PALETTE[theme]
-
   const src = (data: GeoJSON.FeatureCollection) => ({ type: 'geojson' as const, data })
 
   return {
@@ -103,7 +80,6 @@ export function buildStyle(
       wall: src(geo.wall!),
       roads: src(geo.roads!),
       paths: src(geo.paths!),
-      buildings: src(geo.buildings!),
       pois: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
       areas: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
       draft: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
@@ -175,19 +151,12 @@ export function buildStyle(
         },
       },
 
-      {
-        id: 'building', type: 'fill', source: 'buildings',
-        paint: {
-          'fill-color': ['case', ['!=', ['get', 'name'], ''], C.named, C.building],
-          'fill-outline-color': C.buildingEdge,
-          'fill-opacity': 1,
-        },
-      },
-      {
-        id: 'building-top', type: 'line', source: 'buildings',
-        minzoom: 16,
-        paint: { 'line-color': C.buildingEdge, 'line-width': 0.7 },
-      },
+      // No OpenStreetMap building footprints. They were 38 grey squares against
+      // a campus full of buildings, drawn from an extract that has never been
+      // more than a third complete — and over the photograph they sat as boxes
+      // offset from the roofs they claimed to be. What a building looks like
+      // here is now the outline somebody traced onto the imagery, in `areas`
+      // below, and that is the only footprint the map draws.
 
       {
         id: 'campus-edge', type: 'line', source: 'boundary',
@@ -308,16 +277,14 @@ export function buildStyle(
  * frame instead of a full style reload — but it must be re-applied after every
  * `setStyle`, since that throws the whole thing away.
  */
-export function applyImagery(map: maplibregl.Map, on: boolean, theme: 'light' | 'dark' = 'dark') {
+export function applyImagery(map: maplibregl.Map, on: boolean) {
   if (!map.getLayer('imagery')) return
-  const C = PALETTE[theme]
   map.setLayoutProperty('imagery', 'visibility', on ? 'visible' : 'none')
 
-  // Labels need their own treatment over a photograph. The theme's grey-on-pale
-  // pairing is tuned for a flat ground of known lightness; a photo is bright
-  // green, white roof and dark shadow within one word, and the light theme's
-  // labels wash out over it. White on a dark halo is the cartographic answer
-  // and reads on both themes, so over imagery both use it.
+  // Labels need their own treatment over a photograph. The grey-on-dark pairing
+  // is tuned for a flat ground of known lightness; a photo is bright green,
+  // white roof and dark shadow within one word. White on a dark halo is the
+  // cartographic answer, so over imagery that is what they switch to.
   if (map.getLayer('poi-label')) {
     map.setPaintProperty('poi-label', 'text-color', on ? '#ffffff' : C.label)
     map.setPaintProperty('poi-label', 'text-halo-color', on ? 'rgba(0,0,0,0.85)' : C.labelHalo)
@@ -325,13 +292,12 @@ export function applyImagery(map: maplibregl.Map, on: boolean, theme: 'light' | 
   }
 
   // Over a photograph the drawn ground is a hindrance: what you want is the
-  // real roofs, with our outlines on top showing what OSM already knows about.
+  // real roofs, with the surveyed outlines on top of them.
   const opacity: [string, number, number][] = [
     // layer, normal, over imagery
     ['campus', 1, 0],
     ['green', 1, 0.15],
     ['water', 1, 0.2],
-    ['building', 1, 0.22],
     ['road-case', 1, 0.3],
     ['road', 1, 0.45],
     ['path', 1, 0.7],

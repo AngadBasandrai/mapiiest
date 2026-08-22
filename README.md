@@ -34,7 +34,10 @@ npm test           # typecheck + rebuild + smoke test
   building is drawn as a tinted outline with no dot and no label — the places
   inside it carry the names — and clicking anywhere in it opens it. Anything
   else can carry an outline too, and keeps its dot and label on top.
-- **Light and dark**, following the system unless you say otherwise.
+- **One dark ground.** There was a light theme and a toggle; it is gone. This is
+  a map read over aerial photography, and the light twin cost a second set of
+  every basemap colour, a dimmed derivation of all 39 category colours, and a
+  full `setStyle` on every switch — for a mode nobody used.
 - **Deep links** — `?id=w517920623` focuses a place, `?q=library` opens search.
 - **Installs, and works with no network** — see below.
 
@@ -139,11 +142,11 @@ the file costs nothing and the failure it prevents is silent too.
 
 ## Imagery
 
-Esri's World Imagery sits under the map, and it is **on by default**: OSM has 38
-building footprints inside the wall against a campus full of them, so the drawn
-map alone is mostly empty ground with the pins floating over it. On the
-photograph every pin sits on the thing it names. The photo button in the top bar
-switches it off and gives the drawn map back, tinted footprints and all.
+Esri's World Imagery sits under the map, and it is **on by default**: the drawn
+map is ground, roads, water and the surveyed outlines, so on its own it is
+mostly empty with the pins floating over it. On the photograph every pin sits on
+the thing it names. The photo button in the top bar switches it off and gives
+the drawn map back.
 
 Outside the wall it is not a preference but the whole basemap: nothing new is
 fetched from OSM for the survey ring, so the locality is photograph plus
@@ -154,9 +157,9 @@ Those tiles are the **only** request this site makes to anywhere else — and
 because the layer is on by default, that request now happens on every load
 rather than on demand. Everything else is served from this origin.
 
-Labels get their own treatment over the photo: the theme's grey-on-pale pairing
-is tuned for a flat surface of known lightness, and a photo is bright green,
-white roof and dark shadow inside a single word, so both themes switch to white
+Labels get their own treatment over the photo: the grey-on-dark pairing is tuned
+for a flat surface of known lightness, and a photo is bright green, white roof
+and dark shadow inside a single word, so over imagery they switch to white
 on a dark halo while imagery is on.
 
 Google's tiles are deliberately not an option. Serving them requires a Maps
@@ -292,18 +295,24 @@ the editor's picker whether or not anything is in them yet.
 Thirty-nine of the forty draw a coloured dot, which is far past the ~8 a
 categorical palette carries by hue alone. So it is not picked by eye:
 `scripts/solve-palette.mjs` solves it as a maximin problem — spread the colours
-as far apart as thirty-nine can be, scoring the worse of the two themes, since
-the app derives its light colour by dimming the dark one — and only then hands
-each tag a colour, matching the hue and saturation it wants where the spread
-allows it. Separation is a property of the set, so the assignment step cannot
-spend any of it.
+as far apart as thirty-nine can be on the map's one dark ground — and only then
+hands each tag a colour, matching the hue and saturation it wants where the
+spread allows it. Separation is a property of the set, so the assignment step
+cannot spend any of it.
 
-The closest pair comes out at ΔE 11.0 (OKLab ×100) on the dark ground and 7.7 on
-paper. That is down from 12.9/9.1 at twenty-six tags, and the drop is the honest
-price of fourteen more colours out of the same finite space. `building` does not
-compete: it draws no dot, only a fill at a fifth opacity that each building then
-overrides with its own tint, so its khaki is pinned and the dots are solved
-*around* it.
+The closest pair comes out at ΔE 11.0 (OKLab ×100). That is down from 12.9 at
+twenty-six tags, and the drop is the honest price of fourteen more colours out
+of the same finite space. `building` does not compete: it draws no dot, only a
+fill at a fifth opacity that each building then overrides with its own tint, so
+its khaki is pinned and the dots are solved *around* it.
+
+Those values were solved when the app still had a light theme and scored the
+worse of the two. The palette was deliberately **not** re-cut when the theme
+went, and the reason is worth recording: solving for the dark ground alone only
+reaches 11.2. Dimming by 0.62 compresses OKLab distances by about the same
+factor as the ratio the two floors were set at, so the light-theme term had been
+very nearly free all along. Re-solve when the tag set changes, not when the
+ground does.
 
 Assignment is semantic where the spread allows: lakes blue, parks green, health
 crimson, the food group warm, quarters tan — and pharmacies the green cross an
@@ -330,7 +339,7 @@ time, not configured; the pan limits come from the survey area around it. Point
 ```
 
 With it off — the default here — **no place is derived from an OSM tag**. The
-build still draws every building footprint, road, path, lake and the boundary;
+build still draws every road, path, lake and the boundary;
 it just does not turn any of it into a named, searchable pin. Everything on the map comes from you.
 
 Flip it to `true` and rerun `npm run build:data` and the classifier takes over
@@ -374,25 +383,26 @@ without one.
 `npm test` typechecks, rebuilds the data and runs `scripts/smoke.mjs`, which
 asserts that the basemap is intact, that every place is findable by its own
 name, that the tag vocabulary works even for tags nothing has landed in yet,
-that the palette still meets its separation floors, that every place sits inside
+that the palette still meets its separation floor, that every place sits inside
 the survey area and in a tag that exists, and that the MapLibre style validates
-in both themes. It also checks that every element id the TypeScript reaches for
-exists in `index.html` — that mismatch otherwise ships as a blank page.
+with every source it declares actually drawn by a layer. It also checks that
+every element id the TypeScript reaches for exists in `index.html` — that
+mismatch otherwise ships as a blank page.
 
 It bundles the modules with `import.meta.env.DEV` defined as `false`, so what it
 tests is the shape the public gets — which is how the assertions that the editor
 commands *are* present mean anything. Two things it checks the absence of: no
-place derived from an OSM tag while `places.fromOsm` is off, and no trace of the
-five retired tags.
+place derived from an OSM tag while `places.fromOsm` is off, no OSM building
+layer in `geo.json`, and no trace of the five retired tags.
 
-`npm run verify` drives the built site in headless Chrome at three viewports and
+`npm run verify` drives the built site in headless Chrome at two viewports and
 fails on any console error, failed request, or map that never painted. It also
 loads the app, **cuts the network, cold-reloads, and requires the map to come up
 with every place, its labels and a working search** — the only check that can
 tell a real offline app from a manifest and good intentions. It picks a real
 place out of the current data, searches it, opens it, checks its Google Maps
 link carries that place's own coordinates, toggles the imagery layer, and
-confirms the page never asks for your location.
+confirms the page never asks for your location and carries no theme toggle.
 
 It then drives the editor end to end: turns on tag mode, **clicks a point
 outside the campus wall and requires the form to open there**, checks the picker

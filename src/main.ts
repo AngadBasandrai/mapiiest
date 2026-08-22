@@ -5,7 +5,6 @@ import { buildStyle, applyImagery, IMAGERY } from './map/style'
 import { SearchIndex, type Hit } from './search/engine'
 import { initPalette, openPalette } from './ui/palette'
 import { initPanel, showPoi, hidePanel } from './ui/panel'
-import { cycle as cycleTheme, current as themeChoice, onThemeChange, resolved } from './ui/theme'
 import { SITE, panBounds } from './config'
 import { registerServiceWorker, watchNetwork } from './ui/install'
 import * as tagger from './ui/tagger'
@@ -56,22 +55,10 @@ async function start() {
   }
   refreshPoiList()
 
-  // The category palette is tuned for a dark ground; several hues wash out on
-  // white. Darken them for the light theme rather than keeping two hand-written
-  // palettes in sync.
-  const shadeCache = new Map<string, string>()
-  function catColour(cat: string): string {
-    const base = campus.categories[cat]?.color ?? '#8b949e'
-    if (resolved() === 'dark') return base
-    const hit = shadeCache.get(base)
-    if (hit) return hit
-    const n = parseInt(base.slice(1), 16)
-    const mix = (c: number) => Math.round(c * 0.62)
-    const out = '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-      .map((c) => mix(c).toString(16).padStart(2, '0')).join('')
-    shadeCache.set(base, out)
-    return out
-  }
+  // One ground, so one colour. This used to derive a dimmed twin of every
+  // category colour for the light theme and cache it; with the theme gone the
+  // palette is simply what the solver produced.
+  const catColour = (cat: string): string => campus.categories[cat]?.color ?? '#8b949e'
 
   /* ── map ──────────────────────────────────────────────────────────────── */
 
@@ -84,7 +71,7 @@ async function start() {
 
   const map = new maplibregl.Map({
     container: 'map',
-    style: buildStyle(geo, resolved(), base, compact()),
+    style: buildStyle(geo, base, compact()),
     bounds: campus.meta.bbox,
     // Asymmetric on a phone, because the two axes have opposite problems. The
     // campus is a wide band on a tall screen, so vertical room is surplus —
@@ -157,13 +144,7 @@ async function start() {
   }
 
   /** A place's own tint if it has one, else its category's. */
-  function placeColour(p: Poi): string {
-    if (!p.color) return catColour(p.cat)
-    if (resolved() === 'dark') return p.color
-    const n = parseInt(p.color.slice(1), 16)
-    return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-      .map((c) => Math.round(c * 0.62).toString(16).padStart(2, '0')).join('')
-  }
+  const placeColour = (p: Poi): string => p.color ?? catColour(p.cat)
 
   /** The outlines: buildings, and anything else somebody drew a shape for. */
   function areaFeatures(): GeoJSON.FeatureCollection {
@@ -337,10 +318,10 @@ async function start() {
 
   /* ── imagery ──────────────────────────────────────────────────────────── */
 
-  // On by default. OpenStreetMap has 38 building footprints inside the wall
-  // against a campus full of them, so the drawn map alone is mostly empty
-  // ground with pins floating on it; over the photograph every pin sits on the
-  // building it names. Switching it off gives the drawn map back.
+  // On by default, and more so now that the OpenStreetMap footprints are gone:
+  // the drawn map is ground, roads and the surveyed outlines, so away from the
+  // campus it is mostly empty. Over the photograph every pin sits on the thing
+  // it names. Switching it off gives the drawn map back.
   let imagery = true
 
   const imgBtn = document.getElementById('imagery-btn')!
@@ -355,7 +336,7 @@ async function start() {
 
   function setImagery(on: boolean) {
     imagery = on
-    applyImagery(map, on, resolved())
+    applyImagery(map, on)
     setImageryChrome(on)
   }
   credit.innerHTML = `· <a href="${IMAGERY.creditUrl}" target="_blank" rel="noopener">imagery ${IMAGERY.credit}</a>`
@@ -591,10 +572,12 @@ async function start() {
     const existing = hit?.properties?.id ? byId.get(hit.properties.id as string) : undefined
     if (existing) { tagger.showEditForm(existing.id, () => setTagMode(false)); return }
 
-    const under = map.queryRenderedFeatures(e.point, { layers: ['building'] })[0]
-    tagger.showTagForm(e.lngLat.lat, e.lngLat.lng,
-                       (under?.properties?.name as string) || undefined,
-                       () => setTagMode(false))
+    // The form used to prefill its name from the OpenStreetMap footprint under
+    // the tap. There are no footprints on the map any more, and the ones there
+    // were prefilled a name for a box that was usually offset from the roof it
+    // claimed — so it opens empty and the surveyor types what is actually
+    // there, which is the whole point of surveying it.
+    tagger.showTagForm(e.lngLat.lat, e.lngLat.lng, undefined, () => setTagMode(false))
   })
 
   // Categories that had something in them last time the map was painted.
@@ -632,8 +615,6 @@ async function start() {
   // your own changes would look like they had been lost.
   if (tagger.tagCount()) applyEdits()
 
-  // The draft lives in the style, so a theme switch has to refill it.
-  onThemeChange(() => setTimeout(paintDraft, 0))
 
   /* ── chrome ───────────────────────────────────────────────────────────── */
 
@@ -647,30 +628,6 @@ async function start() {
     if (hint) hint.textContent = '⌘K'
   }
 
-
-  /* ── theme ────────────────────────────────────────────────────────────── */
-
-  const themeBtn = document.getElementById('theme-btn')!
-  const GLYPH = { auto: '◐', light: '○', dark: '●' }
-  const paintThemeBtn = () => {
-    const c = themeChoice()
-    themeBtn.textContent = GLYPH[c]
-    themeBtn.title = `Theme: ${c}`
-  }
-  paintThemeBtn()
-  themeBtn.addEventListener('click', () => { cycleTheme(); paintThemeBtn() })
-
-  onThemeChange((t) => {
-    shadeCache.clear()
-    paintRail()
-    // setStyle swaps the basemap wholesale, so the two dynamic sources have to
-    // be refilled once the new style is live.
-    map.setStyle(buildStyle(geo, t, base, compact()))
-    map.once('styledata', () => {
-      applyImagery(map, imagery, t)
-      refreshPois()
-    })
-  })
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !document.getElementById('palette')!.hidden) return
@@ -699,7 +656,7 @@ async function start() {
   whenMapReady(() => {
     clearTimeout(bootTimer)
     // The imagery layer only exists once the style is up.
-    applyImagery(map, imagery, resolved())
+    applyImagery(map, imagery)
     refreshPois()
     boot.classList.add('gone')
     // Deep link: ?q=… opens the palette pre-filled, ?id=… focuses a place.

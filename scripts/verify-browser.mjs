@@ -63,15 +63,10 @@ const browser = await puppeteer.launch({
   args: ['--no-sandbox', '--disable-gpu', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'],
 })
 
-async function check(name, width, height, theme) {
-  console.log(`\n${name} (${width}x${height}${theme ? `, ${theme}` : ''})`)
+async function check(name, width, height) {
+  console.log(`\n${name} (${width}x${height})`)
   const page = await browser.newPage()
   await page.setViewport({ width, height, deviceScaleFactor: 1 })
-  if (theme) {
-    await page.evaluateOnNewDocument((t) => {
-      try { localStorage.setItem('campusmap.theme', t) } catch {}
-    }, theme)
-  }
 
   const errors = []
   const failed = []
@@ -327,7 +322,15 @@ async function check(name, width, height, theme) {
          'and opens in a new tab safely', `target=${dir.target} rel=${dir.rel}`)
     }
 
-    // Nothing may still be trying to route on the page itself.
+    // The theme toggle is gone: one dark ground, no control and no stored choice.
+  const themed = await page.evaluate(() => ({
+    btn: !!document.getElementById('theme-btn'),
+    attr: document.documentElement.getAttribute('data-theme'),
+  }))
+  ok(!themed.btn, 'no theme toggle in the header')
+  ok(themed.attr === null, 'and nothing stamps a theme on the root', String(themed.attr))
+
+  // Nothing may still be trying to route on the page itself.
     const legacy = await page.evaluate(() => ({
       badge: !!document.getElementById('route-badge'),
       layer: !!window.__map?.getLayer('route-line'),
@@ -616,8 +619,8 @@ async function check(name, width, height, theme) {
   ok(initial.credit, 'imagery attribution is shown')
   ok(initial.plate, 'map chrome takes its plate backing over the photo')
   ok(initial.areaLayers, 'hand-drawn outlines have their own layers', String(initial.areaLayers))
-  // The theme's grey-on-pale labels wash out over a photograph; white on a dark
-  // halo is what keeps them readable, in both themes.
+  // The map's grey-on-dark labels wash out over a photograph; white on a dark
+  // halo is what keeps them readable.
   ok(initial.label === '#ffffff', 'labels switch to the over-photo treatment', String(initial.label))
 
   if (SHOTS) {
@@ -636,7 +639,7 @@ async function check(name, width, height, theme) {
     label: window.__map?.getPaintProperty('poi-label', 'text-color'),
   }))
   ok(off.visible === 'none' && off.campusFill === 1 && off.credit, 'switching it off restores the drawn map')
-  ok(off.label !== '#ffffff', 'and labels return to the theme colour', String(off.label))
+  ok(off.label !== '#ffffff', 'and labels return to the drawn-map colour', String(off.label))
 
   // And back on again, so the toggle is proven in both directions.
   await page.click('#imagery-btn')
@@ -817,9 +820,9 @@ async function checkWarmStart() {
   await page.close()
 }
 
-await check('desktop-dark', 1440, 900, 'dark')
-await check('desktop-light', 1440, 900, 'light')
-await check('mobile-dark', 402, 874, 'dark')
+// One ground, so one pass per viewport rather than one per viewport per theme.
+await check('desktop', 1440, 900)
+await check('mobile', 402, 874)
 await checkWarmStart()
 await checkOfflineApp()
 

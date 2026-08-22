@@ -3,16 +3,27 @@
 //
 //   node scripts/solve-palette.mjs
 //
-// The problem: N categories drawn as coloured dots on two grounds, where the
-// light theme's colour is this one with every channel scaled by 0.62 (see
-// catColour in src/main.ts). Picking N colours by eye stops working somewhere
-// around eight; the previous hand-picked set had two categories on the same hex
-// and nobody noticed by looking at the map.
+// The problem: N categories drawn as coloured dots on one dark ground. Picking
+// N colours by eye stops working somewhere around eight; the previous
+// hand-picked set had two categories on the same hex and nobody noticed by
+// looking at the map.
 //
-// So: spread them as far apart as N colours can be — maximin on OKLab ΔE,
-// scoring the worse of the two themes — and only then hand each category a
-// colour, matching the hue it wants where the spread allows it. Separation is a
-// property of the set, so the assignment step cannot spend any of it.
+// So: spread them as far apart as N colours can be — maximin on OKLab ΔE — and
+// only then hand each category a colour, matching the hue and saturation it
+// wants where the spread allows it. Separation is a property of the set, so the
+// assignment step cannot spend any of it.
+//
+// This used to score the worse of two themes, because the app derived a light
+// palette by scaling every channel by 0.62 and both had to work. The light
+// theme is gone, and dropping that term is worth measuring rather than
+// assuming: the ceiling moves from ΔE 11.0 to 11.2. Almost nothing — dimming
+// by 0.62 compresses OKLab distances by about the same factor as the 12/8.5
+// ratio the two floors were set at, so the light term was very nearly free.
+//
+// Which is why the shipped palette was NOT re-solved when the theme went. It
+// already sits at 11.0, within 0.2 of what this can now reach, and rewriting
+// all 39 hexes to buy that would be churn for its own sake. Re-solve when the
+// category set changes, not when the ground does.
 //
 // `building` does not take part. It draws no dot: it is a fill at a fifth
 // opacity that each building then overrides with its own tint from TINTS, so it
@@ -55,30 +66,22 @@ function toHex(L, C, H) {
     Math.round(Math.min(1, Math.max(0, c)) * 255).toString(16).padStart(2, '0')).join('')
 }
 
-/** How the app derives the light theme: each sRGB channel scaled by 0.62. */
-const dim = (h) => '#' + [0, 2, 4]
-  .map((i) => Math.round(parseInt(h.slice(1 + i, 3 + i), 16) * 0.62).toString(16).padStart(2, '0')).join('')
-
 const dE = (x, y) => {
   const a = oklab(x), b = oklab(y)
   return 100 * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
 }
 
-// The two themes are held to different floors — the light one is a dimmed copy,
-// so its whole gamut is smaller and an equal ΔE there is a harder ask. 12 and
-// 8.5 were the floors the 26-colour set met, and their ratio is what makes
-// "the worse of the two themes" a comparison rather than a category error.
-const K = 12 / 8.5
-const cost = (x, y) => Math.min(dE(x, y), dE(dim(x), dim(y)) * K)
+const cost = dE
 
 /* ── candidates ─────────────────────────────────────────────────────────── */
 
-// Lightness is bounded on both sides for the same reason: a dot below ~0.55
-// disappears into the dark ground, and its dimmed twin is near-black; above
-// ~0.9 it disappears into a light one. Chroma below 0.07 reads as grey, which
-// is what "no category" looks like.
+// A dot below ~0.55 disappears into the dark ground. The ceiling used to be
+// 0.90, because above that the dimmed light-theme twin vanished into paper —
+// with no light theme the top of the range is usable again, and near-white at
+// low chroma is a genuinely distinct mark against #0b0d10. Chroma below 0.07
+// reads as grey, which is what "no category" looks like.
 const CAND = []
-for (let L = 0.56; L <= 0.90001; L += 0.02) {
+for (let L = 0.56; L <= 0.96001; L += 0.02) {
   for (let C = 0.07; C <= 0.32001; C += 0.01) {
     for (let H = 0; H < 360; H += 1.5) {
       const h = toHex(L, C, H)
@@ -291,19 +294,16 @@ for (const [key, label, c] of all) {
   console.log(`  ${(key + ':').padEnd(pad + 1)} '${c.hex}',  // ${label} — L${c.L.toFixed(2)} C${c.C.toFixed(2)} H${Math.round(c.H)}`)
 }
 
-const report = (list, xform, name) => {
+const report = (list, name) => {
   let min = Infinity, pair = ''
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
-      const d = dE(xform(list[i][2].hex), xform(list[j][2].hex))
+      const d = dE(list[i][2].hex, list[j][2].hex)
       if (d < min) { min = d; pair = `${list[i][0]}/${list[j][0]}` }
     }
   }
   console.log(`  ${name}  ΔE ${min.toFixed(1)}  (${pair})`)
 }
-const dots = all.filter((r) => r[0] !== 'building')
 console.log('\nseparation')
-report(dots, (x) => x, 'dark, dots only     ')
-report(dots, dim, 'light, dots only    ')
-report(all, (x) => x, 'dark, with building ')
-report(all, dim, 'light, with building')
+report(all.filter((r) => r[0] !== 'building'), 'dots only    ')
+report(all, 'with building')

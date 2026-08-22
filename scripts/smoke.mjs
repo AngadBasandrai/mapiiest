@@ -58,9 +58,12 @@ if (FROM_OSM) {
 }
 ok(campus.pois.every((p) => p.lat && p.lon && p.cat), 'every place has a position and a category')
 
-// The basemap and the network are what make an empty map usable at all: you
-// have to be able to see the buildings to tag them, and route once you have.
-ok(geo.buildings.features.length > 10, `${geo.buildings.features.length} building footprints drawn`)
+// The basemap and the network are what make an empty map usable at all.
+// Buildings are deliberately NOT in here: the OSM footprints were dropped in
+// favour of the outlines the survey traces onto the imagery, so a `buildings`
+// layer coming back means the build started emitting them again.
+ok(!geo.buildings, 'no OSM building layer is shipped',
+   geo.buildings ? `${geo.buildings.features.length} came back` : '')
 ok(geo.roads.features.length + geo.paths.features.length > 10,
    `${geo.roads.features.length + geo.paths.features.length} roads and paths drawn`)
 ok(geo.boundary.features.length === 1, 'campus boundary drawn')
@@ -177,9 +180,6 @@ console.log('\npalette')
     const a = oklab(x), b = oklab(y)
     return 100 * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
   }
-  // How the app derives the light theme: each channel scaled by 0.62.
-  const dim = (h) => '#' + [0, 2, 4]
-    .map((i) => Math.round(parseInt(h.slice(1 + i, 3 + i), 16) * 0.62).toString(16).padStart(2, '0')).join('')
 
   const cats = Object.entries(campus.categories)
   const colors = cats.map(([, v]) => v.color)
@@ -195,28 +195,26 @@ console.log('\npalette')
   // pins its khaki and spreads the dots around it, so it is held to the same
   // floor in the combined check below rather than to a weaker one.
   const dots = cats.filter(([k]) => k !== 'building')
-  const closest = (list, xform) => {
+  const closest = (list) => {
     let worst = Infinity, pair = ''
     for (let i = 0; i < list.length; i++)
       for (let j = i + 1; j < list.length; j++) {
-        const d = dE(xform(list[i][1].color), xform(list[j][1].color))
+        const d = dE(list[i][1].color, list[j][1].color)
         if (d < worst) { worst = d; pair = `${list[i][0]}/${list[j][0]}` }
       }
     return { worst, pair }
   }
-  // The solved set reaches 11.0 dark / 7.7 light across 39 dots. The floors sit
-  // just under that: tight enough that adding a 40th by hand fails here rather
-  // than on the map, loose enough not to break on a re-solve that lands a
-  // tenth lower. A tag added from the tag manager is *not* held to this — the
-  // form warns about a clash and lets it through, because a survey stopping to
-  // argue about colour is worse than two dots that look alike.
-  for (const [label, xform, floor] of [['dark', (x) => x, 10.5], ['light', dim, 7.4]]) {
-    const { worst, pair } = closest(dots, xform)
-    ok(worst >= floor, `${label}: closest dot pair ΔE ${worst.toFixed(1)} (${pair}), floor ${floor}`)
-  }
-  for (const [label, xform, floor] of [['dark', (x) => x, 10.5], ['light', dim, 7.4]]) {
-    const { worst, pair } = closest(cats, xform)
-    ok(worst >= floor, `${label}: closest pair including buildings ΔE ${worst.toFixed(1)} (${pair}), floor ${floor}`)
+  // One ground now, so one floor. The solved set reaches 11.0 across 39 dots
+  // and the ceiling for a dark-only solve is 11.2, so this sits just under
+  // both: tight enough that adding a 40th by hand fails here rather than on
+  // the map, loose enough not to break on a re-solve that lands a tenth lower.
+  // A tag added from the tag manager is *not* held to this — the form warns
+  // about a clash and lets it through, because a survey stopping to argue
+  // about colour is worse than two dots that look alike.
+  const FLOOR = 10.5
+  for (const [label, list] of [['dots only', dots], ['with buildings', cats]]) {
+    const { worst, pair } = closest(list)
+    ok(worst >= FLOOR, `${label}: closest pair ΔE ${worst.toFixed(1)} (${pair}), floor ${FLOOR}`)
   }
 }
 
@@ -390,19 +388,23 @@ await build({
 const { buildStyle } = await fresh(STYLE_TMP)
 const { validateStyleMin } = await import('@maplibre/maplibre-gl-style-spec')
 
-for (const theme of ['dark', 'light']) {
-  const style = buildStyle(geo, theme)
+for (const [label, style] of [['desktop', buildStyle(geo)], ['compact', buildStyle(geo, '/', true)]]) {
   const errors = validateStyleMin(style)
-  ok(errors.length === 0, `${theme} style validates (${style.layers.length} layers)`,
+  ok(errors.length === 0, `${label} style validates (${style.layers.length} layers)`,
      errors.map((e) => e.message).join(' | '))
 
   const missing = style.layers.filter((l) => l.source && !style.sources[l.source]).map((l) => l.id)
-  ok(missing.length === 0, `${theme}: every layer has a source`, missing.join(', '))
+  ok(missing.length === 0, `${label}: every layer has a source`, missing.join(', '))
 
   // A colour token left undefined renders as a black or transparent layer,
   // which is hard to spot and easy to ship.
   const bad = JSON.stringify(style).match(/"(?:[a-z-]*color)":\s*(null|"undefined")/g)
-  ok(!bad, `${theme}: no undefined colours`, bad?.join(', ') ?? '')
+  ok(!bad, `${label}: no undefined colours`, bad?.join(', ') ?? '')
+
+  // A source declared and never drawn is dead weight in every payload.
+  const used = new Set(style.layers.map((l) => l.source).filter(Boolean))
+  const orphan = Object.keys(style.sources).filter((k) => !used.has(k))
+  ok(orphan.length === 0, `${label}: every source is drawn by a layer`, orphan.join(', '))
 }
 
 /* ── DOM contract ────────────────────────────────────────────────────────── */

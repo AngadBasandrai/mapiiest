@@ -37,14 +37,17 @@ const warn = (m) => warnings.push(m)
 // The colours are not hand-picked. 39 dot categories is far past the ~8 a
 // categorical palette carries by hue alone, so they are solved as a maximin
 // problem in scripts/solve-palette.mjs — spread as far apart as 39 colours can
-// be — scoring the worse of the two themes, since the app derives its light
-// colour by dimming this one. The closest pair is ΔE 11.0 (OKLab ×100) on the
-// dark ground and 7.7 on paper.
+// be on the map's one dark ground. The closest pair is ΔE 11.0 (OKLab ×100).
 //
-// That is down from 12.9/9.1 at 26 categories, and the drop is the honest price
-// of the locality survey: fourteen more colours out of the same finite space.
-// It is affordable because the legend only ever shows a category something is
+// That is down from 12.9 at 26 categories, and the drop is the honest price of
+// the locality survey: fourteen more colours out of the same finite space. It
+// is affordable because the legend only ever shows a category something is
 // actually in, so the set on screen is far smaller than the set defined here.
+//
+// These values were solved when the app still had a light theme and scored the
+// worse of the two. That theme is gone, and the palette was deliberately left
+// alone: solving for the dark ground alone only reaches 11.2, so re-cutting all
+// 39 hexes would buy 0.2 and cost every one of them its familiarity.
 //
 // What no palette can do is survive colour blindness: no set of 39 colours can,
 // and the closest protan/deutan pair here is ~0. Identity never rests on colour
@@ -642,17 +645,13 @@ async function main() {
   }
   const touchesCampus = (el) => el.geometry?.some((p) => inCampus(p.lon, p.lat))
 
-  const buildingF = []
-  for (const el of buildings.elements) {
-    if (!el.geometry || el.geometry.length < 3 || !touchesCampus(el)) continue
-    const t = el.tags || {}
-    const cat = t.name ? classify(t) : null
-    buildingF.push(polyOf(el, {
-      name: t.name || '',
-      cat: cat || '',
-      levels: +(t['building:levels'] || 0) || 0,
-    }))
-  }
+  // No building layer. OpenStreetMap's footprints here were 38 squares against
+  // a campus full of buildings, and over the photograph they sat visibly offset
+  // from the roofs they claimed — a drawn approximation of something the
+  // imagery already shows exactly. What a building is on this map is now the
+  // outline somebody traced, which lives in places.json with the rest of the
+  // survey. `buildings.json` stays in data/raw: the classifier still reads it
+  // when `places.fromOsm` is on.
 
   const PATH_KINDS = new Set(['footway', 'path', 'pedestrian', 'steps', 'cycleway', 'track', 'corridor'])
   const pathF = [], roadF = []
@@ -695,7 +694,6 @@ async function main() {
     wall: fc(wallF),
     roads: fc(roadF),
     paths: fc(pathF),
-    buildings: fc(buildingF),
   }
 
   /* ── output ───────────────────────────────────────────────────────────── */
@@ -733,7 +731,7 @@ async function main() {
   if (poiList.length) {
     console.log(`  ${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${v}`).join('  ')}`)
   }
-  console.log(`geo        ${buildingF.length} buildings, ${pathF.length} paths, ${roadF.length} roads, ${greenF.length} green`)
+  console.log(`geo        ${pathF.length} paths, ${roadF.length} roads, ${greenF.length} green (no OSM building layer)`)
   for (const k of Object.keys(curated)) {
     console.log(`curated    ${k}: ${curated[k]?.items?.length ?? 0} items`)
   }
