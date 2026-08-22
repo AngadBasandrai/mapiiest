@@ -232,14 +232,16 @@ export class SearchIndex {
     const wanted: [string, string][] = [
       ['hostel', 'hostel'], ['academic', 'department'], ['library', 'library'],
       ['lake', 'lake'], ['sports', 'ground'], ['landmark', 'tower'],
-      ['canteen', 'canteen'], ['mess', 'mess'], ['water', 'water'],
+      ['canteen', 'canteen'], ['mess', 'mess'], ['street', 'roll'],
+      ['tea', 'cha'], ['pharmacy', 'medicine'], ['stationery', 'xerox'],
       ['activity', 'club'], ['health', 'hospital'], ['atm', 'atm'],
+      ['grocery', 'kirana'], ['transit', 'toto'], ['ghat', 'ghat'],
       ['cycle', 'cycle parking'],
     ]
     const out = wanted.filter(([cat]) => counts[cat]).map(([, word]) => word)
     // Nothing on the map: suggest the commands, which always exist.
     if (!out.length) {
-      return import.meta.env.DEV ? ['tag mode', 'satellite', 'my tags'] : ['satellite']
+      return ['tag mode', 'satellite', 'tags']
     }
     return out.slice(0, 6)
   }
@@ -247,7 +249,14 @@ export class SearchIndex {
 
 /* ── vocabulary ──────────────────────────────────────────────────────────── */
 
-/** Words a student would actually type for each category, English and Bangla. */
+/**
+ * Words a student would actually type for each category, English and Bangla.
+ *
+ * A tag added from the tag manager has no entry here and does not need one --
+ * its own label and key are indexed either way. This is for the built-in set,
+ * where the word people search by is often not the word on the chip: nobody
+ * types "Stationery & xerox", they type "xerox".
+ */
 const ALIASES: Record<string, string[]> = {
   lecture: ['lecture', 'class', 'theatre', 'lt', 'lh', 'hall', 'room', 'tut', 'tutorial', 'auditorium'],
   academic: ['dept', 'department', 'lab', 'building', 'office', 'block', 'centre', 'center'],
@@ -259,35 +268,56 @@ const ALIASES: Record<string, string[]> = {
   hostel: ['hostel', 'hall', 'residence', 'room', 'wing', 'block', 'nivas'],
   mess: ['mess', 'food', 'khabar', 'khana', 'meal', 'breakfast', 'lunch', 'dinner'],
   canteen: ['canteen', 'cafe', 'coffee', 'food', 'eat', 'restaurant', 'snack', 'cha', 'chai', 'tea', 'tiffin'],
-  shop: ['shop', 'store', 'buy', 'grocery', 'market', 'stationery', 'dokan'],
-  print: ['print', 'printer', 'printout', 'xerox', 'photocopy', 'copy', 'scan', 'binding'],
-  water: ['water', 'cooler', 'drinking', 'ro', 'bottle', 'jol', 'pani'],
-  atm: ['atm', 'cash', 'money', 'bank', 'withdraw', 'uco'],
-  cycle: ['cycle', 'cycles', 'bike', 'bicycle', 'parking', 'stand', 'puncture', 'repair'],
-  laundry: ['laundry', 'wash', 'washing', 'dhobi', 'clothes', 'iron', 'dryclean'],
-  health: ['health', 'doctor', 'hospital', 'clinic', 'medical', 'pharmacy', 'medicine', 'emergency', 'counselling'],
+  shop: ['shop', 'store', 'buy', 'dokan', 'shopping'],
+  atm: ['atm', 'cash', 'money', 'bank', 'withdraw', 'uco', 'sbi', 'taka'],
+  cycle: ['cycle', 'cycles', 'bike', 'bicycle', 'parking', 'stand', 'puncture'],
+  laundry: ['laundry', 'wash', 'washing', 'dhobi', 'iron', 'ironing', 'dryclean'],
+  health: ['health', 'doctor', 'hospital', 'clinic', 'medical', 'emergency', 'counselling',
+           'nursing', 'pathology', 'blood', 'test'],
   sports: ['sports', 'gym', 'ground', 'court', 'field', 'pool', 'swim', 'run', 'track', 'play', 'oval'],
-  toilet: ['toilet', 'washroom', 'restroom', 'bathroom', 'loo'],
-  vending: ['vending', 'machine', 'snack', 'chips'],
-  worship: ['temple', 'mosque', 'church', 'prayer', 'worship', 'mandir'],
-  transport: ['bus', 'parking', 'fuel', 'petrol', 'auto', 'taxi', 'charging', 'gate'],
-  admin: ['office', 'admin', 'security', 'police', 'library', 'post', 'help', 'lost', 'found', 'guest'],
-  green: ['park', 'garden', 'green', 'lawn', 'maath'],
+  worship: ['temple', 'mosque', 'church', 'prayer', 'worship', 'mandir', 'masjid', 'puja'],
+  admin: ['office', 'admin', 'security', 'police', 'post', 'help', 'lost', 'found', 'guest'],
+  green: ['park', 'garden', 'green', 'lawn', 'maath', 'math'],
+  gate: ['gate', 'entrance', 'exit', 'main gate', 'no 1', 'no 2'],
+
+  // Food off the wall, split the way an appetite is: sit down, stand and eat,
+  // nurse a cha, or buy something sweet to take back.
+  food: ['restaurant', 'dhaba', 'food', 'dinner', 'lunch', 'biryani', 'thali', 'khabar',
+         'hotel', 'chinese', 'meal'],
+  street: ['roll', 'rolls', 'momo', 'momos', 'chowmein', 'chow', 'phuchka', 'puchka', 'ghugni',
+           'telebhaja', 'street', 'stall', 'snack', 'egg roll', 'fast food', 'cheap'],
+  tea: ['tea', 'cha', 'chai', 'coffee', 'cafe', 'tiffin', 'biscuit', 'lebu cha'],
+  sweets: ['sweets', 'sweet', 'mishti', 'misti', 'roshogolla', 'sandesh', 'bakery',
+           'cake', 'pastry', 'ice cream'],
+
+  // Shops and services.
+  grocery: ['grocery', 'kirana', 'provision', 'general store', 'supermarket', 'vegetables',
+            'sabji', 'daily', 'milk', 'eggs'],
+  stationery: ['xerox', 'photocopy', 'photostat', 'print', 'printout', 'printer', 'copy', 'scan',
+               'binding', 'stationery', 'pen', 'paper', 'notebook', 'books', 'cyber'],
+  pharmacy: ['pharmacy', 'chemist', 'medicine', 'medical store', 'drug', 'tablet',
+             'ointment', 'dawa', 'strip'],
+  repair: ['repair', 'mechanic', 'servicing', 'mobile repair', 'electrician', 'plumber',
+           'cobbler', 'mistri', 'hardware', 'spare', 'charger', 'screen'],
+  salon: ['salon', 'saloon', 'barber', 'haircut', 'hair', 'shave', 'parlour', 'beauty'],
+  clothes: ['clothes', 'tailor', 'darzi', 'garments', 'shirt', 'alteration', 'stitch',
+            'boutique', 'shoes'],
+  market: ['market', 'bazar', 'bazaar', 'haat', 'mall', 'shopping'],
+  school: ['school', 'coaching', 'tuition', 'class', 'vidyalaya', 'institute'],
+  pg: ['pg', 'paying guest', 'rent', 'rental', 'room', 'flat', 'to let', 'mess bari', 'accommodation'],
+
+  // Getting around, and the words Howrah uses for it.
+  transit: ['bus', 'bus stop', 'auto', 'toto', 'taxi', 'stand', 'parking', 'station',
+            'train', 'transport', 'rickshaw'],
+  ghat: ['ghat', 'ferry', 'jetty', 'launch', 'boat', 'river', 'hooghly', 'kolkata'],
+  fuel: ['petrol', 'pump', 'fuel', 'diesel', 'gas', 'cng', 'charging'],
+
+  // The two that only exist because the map left the campus.
+  locality: ['locality', 'para', 'neighbourhood', 'neighborhood', 'area', 'colony', 'lane'],
+  hangout: ['adda', 'hangout', 'chill', 'sit', 'bench', 'spot', 'meet', 'evening'],
 }
 
 interface Action { id: string; title: string; sub: string; words: string }
-
-/**
- * The surveying commands. Kept in their own array so that the ternary below
- * folds to `[]` in a build and the whole thing tree-shakes out — a `dev` flag
- * filtered at runtime would leave all this wording in the bundle, describing a
- * feature the published site does not have.
- */
-const DEV_ACTIONS: Action[] = [
-  { id: 'tag-mode', title: 'Tag mode', sub: 'Tap the map to add a missing place', words: 'tag add missing new mark edit survey contribute' },
-  { id: 'tags', title: 'My tags', sub: 'Export or delete the places you tagged', words: 'tags mine saved export json download list' },
-  { id: 'tags-clear', title: 'Delete all my tags', sub: 'Clears every tag in this browser', words: 'delete remove clear wipe reset all tags' },
-]
 
 const ACTIONS: Action[] = [
   // "google" and "google maps" are in here on purpose: it is what people type
@@ -295,5 +325,13 @@ const ACTIONS: Action[] = [
   { id: 'imagery', title: 'Satellite imagery', sub: 'Aerial photo under the map', words: 'satellite aerial imagery photo google maps earth view real' },
   { id: 'layers-all', title: 'Show every layer', sub: 'Turn all categories on', words: 'all layers everything show' },
   { id: 'layers-none', title: 'Hide every layer', sub: 'Clear the map', words: 'none clear hide reset layers' },
-  ...(import.meta.env.DEV ? DEV_ACTIONS : []),
+
+  // The editor. These used to live behind `import.meta.env.DEV` in an array of
+  // their own, so the ternary would fold to `[]` and take the wording with it.
+  // The survey is running again and past the wall now, so they are simply
+  // commands, and the palette is the fastest way to any of them.
+  { id: 'tag-mode', title: 'Tag mode', sub: 'Tap the map to add or edit a place', words: 'tag add missing new mark edit survey contribute point area outline' },
+  { id: 'places', title: 'Places', sub: 'Every place on the map — edit or export', words: 'places mine saved export json download list changes' },
+  { id: 'tags', title: 'Tags', sub: 'Add, rename or remove a category', words: 'tags categories category vocabulary new colour color layer kind type' },
+  { id: 'tags-clear', title: 'Discard my place changes', sub: 'Clears every unsaved place edit in this browser', words: 'delete remove clear wipe reset discard changes' },
 ]

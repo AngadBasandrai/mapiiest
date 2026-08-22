@@ -25,54 +25,101 @@ const warn = (m) => warnings.push(m)
 
 /* ── categories ─────────────────────────────────────────────────────────── */
 // Every POI lands in exactly one category. Order matters: first match wins.
-// `pin` = drawn as a labelled marker; others are drawn only when their layer is on.
+// `pin` = drawn as a labelled marker; others are drawn only when their layer is
+// on. `group` only sorts the picker in the editor — 40 categories in one flat
+// dropdown is a list nobody reads to the end of.
 //
-// The colours are not hand-picked. 25 categories is far past the ~8 a
-// categorical palette carries by hue alone, so they were solved as a maximin
-// problem — spread as far apart as 25 colours can be — scoring the worse of the
-// two themes, since the app derives its light colour by dimming this one. The
-// result separates the closest pair by ΔE 12.9 (OKLab ×100) on the dark ground
-// and 9.1 on paper, against 0 before: `mess` and `canteen` were the same hex.
+// These are the built-in set, not the whole set. data/curated/categories.json
+// can add, retune or retire any of them, and the editor writes that file — so
+// what ships here is a starting point for a survey rather than a fixed
+// vocabulary.
 //
-// What it cannot do is survive colour blindness: no set of 25 colours can, and
-// the closest protan/deutan pair here is ~0. Identity never rests on colour
+// The colours are not hand-picked. 39 dot categories is far past the ~8 a
+// categorical palette carries by hue alone, so they are solved as a maximin
+// problem in scripts/solve-palette.mjs — spread as far apart as 39 colours can
+// be — scoring the worse of the two themes, since the app derives its light
+// colour by dimming this one. The closest pair is ΔE 11.0 (OKLab ×100) on the
+// dark ground and 7.7 on paper.
+//
+// That is down from 12.9/9.1 at 26 categories, and the drop is the honest price
+// of the locality survey: fourteen more colours out of the same finite space.
+// It is affordable because the legend only ever shows a category something is
+// actually in, so the set on screen is far smaller than the set defined here.
+//
+// What no palette can do is survive colour blindness: no set of 39 colours can,
+// and the closest protan/deutan pair here is ~0. Identity never rests on colour
 // alone — pinned places carry their name on the map, the legend chip names its
 // category, and clicking a dot opens its name.
 //
-// Assignment is semantic where the hue allows it: lakes blue, parks green,
-// health red, quarters brown. Parks and sports take the two closest greens on
-// purpose — they are the pair it costs least to confuse.
+// Assignment is semantic where the spread allows it: lakes blue, parks green,
+// health crimson, pharmacies the green cross an Indian chemist actually uses,
+// the food group warm, quarters tan. Parks and cycle parking take two of the
+// closest greens on purpose — they are a pair it costs little to confuse.
+
+export const GROUPS = {
+  campus:  'On campus',
+  ground:  'Ground & landmarks',
+  food:    'Food & drink',
+  service: 'Shops & services',
+  moving:  'Getting around',
+}
 
 export const CATEGORIES = {
+  /* ── on campus ────────────────────────────────────────────────────────── */
   // Buildings are containers: departments, offices and labs sit inside one.
   // They draw as an outlined area with no dot and no label — the places inside
   // carry the names, and a building's own name on top of them would be noise.
-  building: { label: 'Buildings',     color: '#adb78c', pin: false, area: true },
-  lecture:  { label: 'Lecture halls', color: '#f4993c', pin: true },
-  academic: { label: 'Depts & labs',  color: '#2852f0', pin: true },
-  hostel:   { label: 'Halls & hostels', color: '#a127fc', pin: true },
-  library:  { label: 'Libraries',     color: '#e05f00', pin: true },
-  mess:     { label: 'Messes',        color: '#4aff6b', pin: true },
-  canteen:  { label: 'Canteens',      color: '#04cfa2', pin: true },
-  landmark: { label: 'Landmarks',     color: '#f1d2ad', pin: true },
-  lake:     { label: 'Lakes & ponds', color: '#0cc1fd', pin: true },
-  activity: { label: 'Clubs & activities', color: '#fa256a', pin: true },
-  shop:     { label: 'Shops',         color: '#7e79f5', pin: false },
-  print:    { label: 'Printing',      color: '#e364db', pin: false },
-  water:    { label: 'Water coolers', color: '#64f0f4', pin: false },
-  atm:      { label: 'ATMs & banks',  color: '#ecdc21', pin: false },
-  cycle:    { label: 'Cycle parking', color: '#157e2c', pin: false },
-  laundry:  { label: 'Laundry',       color: '#e0adfb', pin: false },
-  health:   { label: 'Health',        color: '#c50031', pin: false },
-  sports:   { label: 'Sports',        color: '#9ac321', pin: false },
-  toilet:   { label: 'Toilets',       color: '#559d7b', pin: false },
-  vending:  { label: 'Vending',       color: '#cd1aa5', pin: false },
-  worship:  { label: 'Worship',       color: '#7e539c', pin: false },
-  transport:{ label: 'Transport',     color: '#ff85a2', pin: false },
-  admin:    { label: 'Admin & help',  color: '#1d7390', pin: false },
-  quarters: { label: 'Staff quarters',color: '#896027', pin: false },
-  abandoned:{ label: 'Abandoned',     color: '#a696bd', pin: false },
-  green:    { label: 'Parks',         color: '#1da90f', pin: false },
+  building:   { label: 'Buildings',            color: '#adb78c', pin: false, group: 'campus', area: true },
+  academic:   { label: 'Depts & labs',         color: '#1779e1', pin: true,  group: 'campus' },
+  lecture:    { label: 'Lecture halls',        color: '#c35405', pin: true,  group: 'campus' },
+  library:    { label: 'Libraries',            color: '#fda19b', pin: true,  group: 'campus' },
+  admin:      { label: 'Admin & help',         color: '#a5d0f6', pin: false, group: 'campus' },
+  activity:   { label: 'Clubs & activities',   color: '#f1027c', pin: true,  group: 'campus' },
+  hostel:     { label: 'Halls & hostels',      color: '#a56cff', pin: true,  group: 'campus' },
+  quarters:   { label: 'Staff quarters',       color: '#f9ad26', pin: false, group: 'campus' },
+  mess:       { label: 'Messes',               color: '#23ec1f', pin: true,  group: 'campus' },
+  canteen:    { label: 'Canteens',             color: '#11c98b', pin: true,  group: 'campus' },
+  sports:     { label: 'Sports',               color: '#b3f817', pin: false, group: 'campus' },
+  gate:       { label: 'Gates',                color: '#a09600', pin: true,  group: 'campus' },
+  abandoned:  { label: 'Abandoned',            color: '#8d83b9', pin: false, group: 'campus' },
+
+  /* ── ground & landmarks ───────────────────────────────────────────────── */
+  landmark:   { label: 'Landmarks',            color: '#85733a', pin: true,  group: 'ground' },
+  lake:       { label: 'Lakes & ponds',        color: '#05a0d2', pin: true,  group: 'ground' },
+  green:      { label: 'Parks & gardens',      color: '#018e01', pin: false, group: 'ground' },
+  worship:    { label: 'Worship',              color: '#fe7cff', pin: false, group: 'ground' },
+  // A para is the unit people actually navigate Howrah by — "meet me at
+  // Kadamtala" is an address in a way that a street name is not. Pinned,
+  // because the whole point of one is to be readable without being tapped.
+  locality:   { label: 'Localities & paras',   color: '#d09cd7', pin: true,  group: 'ground' },
+  hangout:    { label: 'Hangouts & adda',      color: '#ffcafe', pin: false, group: 'ground' },
+
+  /* ── food & drink ─────────────────────────────────────────────────────── */
+  food:       { label: 'Restaurants & dhabas', color: '#f90e12', pin: true,  group: 'food' },
+  street:     { label: 'Street food & rolls',  color: '#f9667d', pin: false, group: 'food' },
+  tea:        { label: 'Tea stalls & cafes',   color: '#ff7808', pin: false, group: 'food' },
+  sweets:     { label: 'Sweets & bakeries',    color: '#b88472', pin: false, group: 'food' },
+
+  /* ── shops & services ─────────────────────────────────────────────────── */
+  shop:       { label: 'Shops',                color: '#6451fa', pin: false, group: 'service' },
+  grocery:    { label: 'Grocery & kirana',     color: '#baca0d', pin: false, group: 'service' },
+  stationery: { label: 'Stationery & xerox',   color: '#c510c4', pin: false, group: 'service' },
+  pharmacy:   { label: 'Pharmacies',           color: '#7eed9e', pin: false, group: 'service' },
+  health:     { label: 'Health',               color: '#b8476e', pin: false, group: 'service' },
+  repair:     { label: 'Repairs & spares',     color: '#31c6d6', pin: false, group: 'service' },
+  salon:      { label: 'Salons & barbers',     color: '#fe06fd', pin: false, group: 'service' },
+  clothes:    { label: 'Clothes & tailors',    color: '#d061c1', pin: false, group: 'service' },
+  laundry:    { label: 'Laundry',              color: '#529e74', pin: false, group: 'service' },
+  market:     { label: 'Markets & bazaars',    color: '#efd3a3', pin: true,  group: 'service' },
+  atm:        { label: 'ATMs & banks',         color: '#ffdd22', pin: false, group: 'service' },
+  school:     { label: 'Schools & coaching',   color: '#9d05f8', pin: false, group: 'service' },
+  pg:         { label: 'PG & rentals',         color: '#9353b7', pin: false, group: 'service' },
+
+  /* ── getting around ───────────────────────────────────────────────────── */
+  transit:    { label: 'Buses, autos & totos', color: '#20fcff', pin: false, group: 'moving' },
+  ghat:       { label: 'Ferry ghats',          color: '#407e90', pin: true,  group: 'moving' },
+  fuel:       { label: 'Petrol pumps',         color: '#83a8fd', pin: false, group: 'moving' },
+  cycle:      { label: 'Cycle parking',        color: '#06b905', pin: false, group: 'moving' },
 }
 
 function classify(t) {
@@ -93,20 +140,29 @@ function classify(t) {
       /^(Tutorial Block|LT[\s-]?\d)/i.test(name) || a === 'lecture_hall') return 'lecture'
   if (a === 'theatre' || a === 'cinema' || a === 'conference_centre' || /Auditorium$/i.test(name)) return 'lecture'
 
+  // Campus catering leads, because on this side of the wall "canteen" and
+  // "mess" are institutions with names rather than descriptions of a shop.
   if (/\bMess\b/i.test(name) || a === 'canteen') return 'mess'
   if (/\bCanteen\b/i.test(name)) return 'canteen'
-  if (a === 'restaurant' || a === 'fast_food' || a === 'cafe' || a === 'ice_cream' ||
-      a === 'food_court' || s === 'bakery') return 'canteen'
+
+  // Off the wall the food splits four ways, because a student chooses between
+  // them and not between "food" and "not food": somewhere to sit, somewhere to
+  // stand with a roll, somewhere to nurse a cha, and somewhere to buy mishti.
+  if (a === 'ice_cream' || s === 'bakery' || s === 'confectionery' || s === 'pastry' ||
+      s === 'chocolate' || /\b(Sweets?|Mishti|Misti|Bakery|Cake|Confectioner)\b/i.test(name)) return 'sweets'
+  if (a === 'cafe' || s === 'coffee' || s === 'tea' ||
+      /\b(Tea|Cha|Chai|Coffee|Tiffin|Cafe|Café)\b/i.test(name)) return 'tea'
+  if (a === 'fast_food' || a === 'street_vendor' || a === 'food_court' ||
+      t.street_vendor === 'yes' ||
+      /\b(Roll|Rolls|Momo|Chowmein|Chow|Phuchka|Puchka|Ghugni|Telebhaja|Stall)\b/i.test(name)) return 'street'
+  if (a === 'restaurant' || a === 'bar' || a === 'pub' || a === 'biergarten' ||
+      /\b(Restaurant|Dhaba|Hotel & Restaurant|Biryani|Bhojanalaya)\b/i.test(name)) return 'food'
 
   if (a === 'library' || a === 'public_bookcase' || /\bLibrary\b/i.test(name)) return 'library'
 
   if (a === 'atm' || a === 'bank' || a === 'bureau_de_change') return 'atm'
-  if (a === 'drinking_water' || t.man_made === 'water_tap' || a === 'water_point') return 'water'
   if (a === 'bicycle_parking' || a === 'bicycle_repair_station' || s === 'bicycle') return 'cycle'
-  if (s === 'laundry' || s === 'dry_cleaning' || a === 'laundry' || /Laundry/i.test(name)) return 'laundry'
-  if (s === 'copyshop' || a === 'printer' || /\b(xerox|photocopy|printout|print)\b/i.test(name)) return 'print'
-  if (a === 'vending_machine') return 'vending'
-  if (a === 'toilets') return 'toilet'
+  if (s === 'laundry' || s === 'dry_cleaning' || a === 'laundry' || /Laundry|Dhobi/i.test(name)) return 'laundry'
   if (a === 'place_of_worship' || /Temple|Mandir|Mosque|Masjid|Church|Gurudwara/i.test(name)) return 'worship'
 
   // Landmarks: the things you navigate by rather than go into. The campus
@@ -126,27 +182,77 @@ function classify(t) {
     return 'activity'
   }
 
+  // Medicine before medicine-with-a-doctor-attached: at eleven at night the
+  // chemist is the thing being looked for, and it is a different errand.
+  if (a === 'pharmacy' || s === 'chemist' || s === 'medical_supply' ||
+      /\b(Pharmacy|Chemist|Medical Store|Medicine Shop|Drug House)\b/i.test(name)) return 'pharmacy'
+
   // OSM here tags the campus hospital as building=hospital with no amenity, so
   // the building value has to be read as well as the amenity.
-  if (a === 'hospital' || a === 'clinic' || a === 'doctors' || a === 'pharmacy' ||
+  if (a === 'hospital' || a === 'clinic' || a === 'doctors' ||
       a === 'dentist' || a === 'veterinary' || h ||
-      b === 'hospital' || /\b(Hospital|Dispensary|Health Centre|Health Center)\b/i.test(name)) return 'health'
+      b === 'hospital' || /\b(Hospital|Dispensary|Health Centre|Health Center|Nursing Home|Pathology|Diagnostic)\b/i.test(name)) return 'health'
 
   if (a === 'police' || a === 'fire_station' || a === 'post_office' || a === 'townhall' ||
       o === 'security' || o === 'government' ||
       a === 'childcare' || a === 'social_facility' ||
       tr === 'guest_house' || tr === 'hotel' || /Guest House/i.test(name)) return 'admin'
 
-  if (a === 'parking' || a === 'fuel' || a === 'charging_station' || a === 'bus_station' ||
-      a === 'taxi' || a === 'bicycle_rental' || a === 'car_rental' ||
-      /\bGate\b/i.test(name)) return 'transport'
+  // A gate is a place you are told to meet at, so it leads over the road
+  // furniture around it.
+  if (t.barrier === 'gate' || t.barrier === 'entrance' || t.entrance ||
+      /\b(Gate ?\d*|Main Gate|Back Gate|Gate No)\b/i.test(name)) return 'gate'
+
+  // Getting around, split by what you would actually board. A ghat is not a
+  // bus stop: on this bank of the Hooghly it is the fast way into Kolkata.
+  if (a === 'ferry_terminal' || t.amenity === 'ferry_terminal' ||
+      /\b(Ghat|Jetty|Ferry)\b/i.test(name)) return 'ghat'
+  if (a === 'fuel' || a === 'charging_station' ||
+      /\b(Petrol Pump|Filling Station|Fuel|HP|IOCL|BPCL)\b/i.test(name)) return 'fuel'
+  if (a === 'bus_station' || t.highway === 'bus_stop' || t.public_transport ||
+      a === 'taxi' || a === 'bicycle_rental' || a === 'car_rental' || a === 'parking' ||
+      t.railway === 'station' || t.railway === 'halt' ||
+      /\b(Bus Stop|Bus Stand|Auto Stand|Toto Stand|Taxi Stand|Station)\b/i.test(name)) return 'transit'
 
   if (l === 'pitch' || l === 'sports_centre' || l === 'fitness_centre' || l === 'swimming_pool' ||
       l === 'track' || l === 'playground' || l === 'stadium' || l === 'bleachers' ||
       /\bGym\b/i.test(name)) return 'sports'
   if (l === 'park' || l === 'garden' || l === 'nature_reserve') return 'green'
 
-  if (s || a === 'marketplace') return 'shop'
+  /* ── the shops outside the wall ───────────────────────────────────────── */
+  // `shop=*` used to fall into one bucket, which was fine when the map stopped
+  // at the boundary and there were four of them. Outside it, "shop" is most of
+  // what there is to map, and a student picking between a kirana and a chemist
+  // is not helped by both being a purple dot.
+  if (a === 'marketplace' || s === 'mall' || s === 'department_store' ||
+      /\b(Bazar|Bazaar|Market|Haat|Hat)\b/i.test(name)) return 'market'
+  if (s === 'convenience' || s === 'supermarket' || s === 'grocery' || s === 'general' ||
+      s === 'greengrocer' || s === 'butcher' || s === 'seafood' || s === 'dairy' ||
+      s === 'alcohol' || s === 'beverages' || s === 'frozen_food' || s === 'farm' ||
+      /\b(Kirana|Grocer|Grocery|Provision|Stores?)\b/i.test(name)) return 'grocery'
+  if (s === 'stationery' || s === 'copyshop' || s === 'books' || s === 'newsagent' ||
+      s === 'printing' || a === 'printer' ||
+      /\b(Xerox|Photocopy|Photostat|Printout|Stationery|Book\s?Stall|Cyber)\b/i.test(name)) return 'stationery'
+  if (s === 'hairdresser' || s === 'beauty' || s === 'massage' || a === 'spa' ||
+      /\b(Salon|Saloon|Barber|Parlour|Parlor)\b/i.test(name)) return 'salon'
+  if (s === 'clothes' || s === 'tailor' || s === 'shoes' || s === 'fabric' ||
+      s === 'boutique' || s === 'bag' || s === 'jewelry' || s === 'watches' ||
+      /\b(Tailor|Darzi|Boutique|Garments?|Cloth)\b/i.test(name)) return 'clothes'
+  if (s === 'mobile_phone' || s === 'electronics' || s === 'computer' || s === 'hardware' ||
+      s === 'doityourself' || s === 'electrical' || s === 'car_repair' || s === 'motorcycle_repair' ||
+      s === 'shoe_repair' || s === 'locksmith' || s === 'paint' || s === 'trade' ||
+      a === 'mobile_money_agent' ||
+      /\b(Repair|Servicing|Mechanic|Electrician|Plumber|Cobbler|Mistri|Hardware|Spare)\b/i.test(name)) return 'repair'
+
+  // Somewhere to live is its own errand, and the words for it here are local.
+  if (tr === 'apartment' ||
+      /\b(P\.?G\.?|Paying Guest|Mess Bari|To[- ]?Let|Rental|Rooms? Available)\b/i.test(name)) return 'pg'
+
+  if (a === 'school' || a === 'kindergarten' || a === 'driving_school' ||
+      a === 'language_school' || a === 'training' || a === 'prep_school' ||
+      /\b(Coaching|Tuition|Tutorial Home|Vidyalaya|Vidyapith|Sishu|High School)\b/i.test(name)) return 'school'
+
+  if (s) return 'shop'
 
   // Halls of residence here are tagged tourism=hostel and named after former
   // principals — Downing, Slater, Wolfenden — so the tag has to lead. A bare
@@ -158,7 +264,7 @@ function classify(t) {
   if (b === 'apartments' || b === 'residential' || /\b(Quarters|Staff Housing)\b/i.test(name)) return 'quarters'
 
   if (o === 'university' || o === 'research' || a === 'university' || a === 'research_institute' ||
-      a === 'college' || a === 'school' || o === 'educational_institution' ||
+      a === 'college' || o === 'educational_institution' ||
       b === 'university' || b === 'college' || b === 'school' ||
       /\b(Department|Dept|Laboratory|Lab|Centre|Center|Institute|Academy|College|School|Facility|Building|Block|Complex|Wing|Workshop)\b/i.test(name)) {
     return 'academic'
@@ -230,12 +336,38 @@ async function main() {
   const inCampus = (lon, lat) => pointInRing(lon, lat, ring)
 
   // Framing comes from the boundary, not from hand-tuned constants: the app
-  // fits this box on load and clamps panning to a padded version of it. Get it
-  // wrong and the campus opens as an island adrift in an empty viewport.
+  // fits this box on load. Get it wrong and the campus opens as an island
+  // adrift in an empty viewport. It stays the *campus* box even though places
+  // now go well past it — opening on the whole survey area would frame two and
+  // a half kilometres of Howrah to show a campus in the middle of it.
   const bbox = [
     [Math.min(...ring.map((p) => p[0])), Math.min(...ring.map((p) => p[1]))],
     [Math.max(...ring.map((p) => p[0])), Math.max(...ring.map((p) => p[1]))],
   ]
+
+  /**
+   * The survey area: the campus plus a ring of locality around it.
+   *
+   * The wall used to be the edge of the world here — anything curated outside
+   * it was rejected as a survey mistake, which is the right call when the whole
+   * map is a campus. It is the wrong call the moment the thing being mapped is
+   * where a student actually spends money: the chemist, the roll shop, the toto
+   * stand and the ghat are all on the far side of it.
+   *
+   * So the wall stops being a filter and becomes what it really is — a line on
+   * the map. This box is the filter instead, and it is still a filter: a place
+   * a kilometre and a half out is a fat-fingered tap, not a discovery.
+   */
+  const RADIUS_KM = Number(SITE.survey?.radiusKm) || 1
+  const padLat = RADIUS_KM / 111.32
+  // Longitude degrees are shorter than latitude ones away from the equator.
+  const padLon = padLat / Math.cos(rad((bbox[0][1] + bbox[1][1]) / 2))
+  const area = [
+    [+(bbox[0][0] - padLon).toFixed(5), +(bbox[0][1] - padLat).toFixed(5)],
+    [+(bbox[1][0] + padLon).toFixed(5), +(bbox[1][1] + padLat).toFixed(5)],
+  ]
+  const inArea = (lon, lat) =>
+    lon >= area[0][0] && lon <= area[1][0] && lat >= area[0][1] && lat <= area[1][1]
   // Area-weighted centroid, which is what routing falls back to when the
   // browser will not say where you are. It has to be somewhere you could
   // actually stand, so reject it if the ring is concave enough to push it out.
@@ -316,17 +448,21 @@ async function main() {
   // Unnamed but useful. A cycle stand, a pond or a water tower is worth showing
   // whether or not anyone has bothered to name it — so each gets a label saying
   // what it is.
+  // Only kinds that still have a category to land in: `classify` drops the
+  // rest, so a label here for a retired category would be a promise the build
+  // silently fails to keep.
   const UNNAMED_LABELS = {
-    bicycle_parking: 'Cycle parking', drinking_water: 'Drinking water',
-    atm: 'ATM', toilets: 'Toilets', vending_machine: 'Vending machine',
-    water_point: 'Water point', bicycle_repair_station: 'Cycle repair',
+    bicycle_parking: 'Cycle parking', bicycle_repair_station: 'Cycle repair',
+    atm: 'ATM', ferry_terminal: 'Ferry ghat', fuel: 'Petrol pump',
     water_tower: 'Water tower', tower: 'Tower', lighthouse: 'Tower',
-    water_tap: 'Water tap', lake: 'Lake', pond: 'Pond', reservoir: 'Reservoir',
+    lake: 'Lake', pond: 'Pond', reservoir: 'Reservoir',
   }
   const unnamedKey = (t) =>
     (UNNAMED_LABELS[t.amenity] && t.amenity) ||
     (UNNAMED_LABELS[t.man_made] && t.man_made) ||
+    (t.highway === 'bus_stop' ? 'bus_stop' : null) ||
     (t.natural === 'water' ? (UNNAMED_LABELS[t.water] ? t.water : 'lake') : null)
+  UNNAMED_LABELS.bus_stop = 'Bus stop'
 
   for (const el of FROM_OSM ? [...pois.elements, ...land.elements] : []) {
     const t = el.tags || {}
@@ -361,13 +497,57 @@ async function main() {
     }
   }
 
+  /**
+   * The category set: the built-ins with data/curated/categories.json applied
+   * on top. A row there either retunes a built-in (same key, new label, colour
+   * or pin), retires one (`deleted: true`), or adds one that never existed.
+   *
+   * This is what makes the editor's tag manager mean anything beyond the tab
+   * it was used in: it exports this file, and a rebuild makes the vocabulary
+   * everyone's. Note that it is pulled out of `curated` by hand rather than
+   * left to the spread below — `{ categories: CATEGORIES, ...curated }` would
+   * have a categories.json silently *replace* the built-ins instead of layering
+   * over them, which is a difference nobody would notice until half the map
+   * turned grey.
+   */
+  const catEdits = curated.categories?.items ?? []
+  delete curated.categories
+  const categories = { ...CATEGORIES }
+  let catAdded = 0, catRetired = 0, catRetuned = 0
+  for (const c of catEdits) {
+    if (!c?.key || !/^[a-z][a-z0-9_-]{0,23}$/.test(c.key)) {
+      warn(`category "${c?.key}" has an unusable key — [a-z][a-z0-9_-]{0,23}`)
+      continue
+    }
+    if (c.deleted) {
+      if (categories[c.key]) { delete categories[c.key]; catRetired++ }
+      continue
+    }
+    if (!/^#[0-9a-f]{6}$/i.test(c.color ?? '')) {
+      warn(`category "${c.key}" has no usable colour — it would draw as a black dot`)
+      continue
+    }
+    if (categories[c.key]) catRetuned++; else catAdded++
+    categories[c.key] = {
+      label: String(c.label || c.key),
+      color: c.color.toLowerCase(),
+      pin: c.pin === true,
+      group: c.group && GROUPS[c.group] ? c.group : 'service',
+      ...(c.area ? { area: true } : {}),
+    }
+  }
+
+  // A place in a category that no longer exists draws a black dot in a layer
+  // with no legend chip, which is a worse outcome than being told about it.
+  const orphanCats = new Set()
+
   // Anchor lookup: normalised name -> POI. Used to place curated records.
   const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
   const anchors = new Map()
   for (const p of byId.values()) {
     const k = norm(p.name)
     // Prefer named, pin-worthy features as anchors over generic footprints.
-    if (!anchors.has(k) || CATEGORIES[p.cat]?.pin) anchors.set(k, p)
+    if (!anchors.has(k) || categories[p.cat]?.pin) anchors.set(k, p)
   }
 
   function resolveAnchor(anchor, who) {
@@ -395,8 +575,8 @@ async function main() {
       .filter((c) => Array.isArray(c) && c.length === 2 && c.every(Number.isFinite))
       .map(([lon, lat]) => [+(+lon).toFixed(6), +(+lat).toFixed(6)])
     if (pts.length !== p.poly.length) { warn(`curated "${p.id}" has a malformed outline point`); return null }
-    const stray = pts.filter(([lon, lat]) => !inCampus(lon, lat)).length
-    if (stray) warn(`curated "${p.id}" has ${stray} outline point(s) outside the campus boundary`)
+    const stray = pts.filter(([lon, lat]) => !inArea(lon, lat)).length
+    if (stray) warn(`curated "${p.id}" has ${stray} outline point(s) outside the survey area`)
     // Closed for GeoJSON's sake; the editor stores it open.
     const first = pts[0], last = pts[pts.length - 1]
     if (first[0] !== last[0] || first[1] !== last[1]) pts.push([...first])
@@ -414,7 +594,7 @@ async function main() {
     if (poly) p = { ...p, poly }
 
     if (p.lat != null && p.lon != null) {
-      if (!inCampus(p.lon, p.lat)) { warn(`curated "${p.id}" is outside the campus boundary`); continue }
+      if (!inArea(p.lon, p.lat)) { warn(`curated "${p.id}" is outside the survey area`); continue }
       const { anchor, ...rest } = p
       void anchor
       byId.set(p.id, { ...rest, lat: +(+p.lat).toFixed(6), lon: +(+p.lon).toFixed(6), src: 'seed' })
@@ -437,6 +617,12 @@ async function main() {
       near: a.name,
     })
     curatedCount++
+  }
+
+  for (const p of byId.values()) if (!categories[p.cat]) orphanCats.add(p.cat)
+  for (const c of orphanCats) {
+    const n = [...byId.values()].filter((p) => p.cat === c).length
+    warn(`${n} place(s) are in category "${c}", which no longer exists — they will draw unstyled`)
   }
 
   const poiList = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
@@ -523,11 +709,13 @@ async function main() {
       built: new Date().toISOString().slice(0, 10),
       center,
       bbox,
+      area,
       attribution: '© OpenStreetMap contributors (ODbL)',
       osmWay: SITE.osm.campusWay,
       counts,
     },
-    categories: CATEGORIES,
+    categories,
+    groups: GROUPS,
     pois: poiList,
     ...curated,
   }
@@ -549,6 +737,10 @@ async function main() {
   for (const k of Object.keys(curated)) {
     console.log(`curated    ${k}: ${curated[k]?.items?.length ?? 0} items`)
   }
+  console.log(`categories ${Object.keys(categories).length}` + (catEdits.length
+    ? ` (${catAdded} added, ${catRetuned} retuned, ${catRetired} retired by hand)`
+    : ' (built-in set — none edited)'))
+  console.log(`area       campus + ${RADIUS_KM} km: ${area[0][1]}–${area[1][1]} N, ${area[0][0]}–${area[1][0]} E`)
   console.log(`output     campus ${kb(campus)}, geo ${kb(geo)}`)
   if (warnings.length) {
     console.log(`\n${warnings.length} warning(s):`)

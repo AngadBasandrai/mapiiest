@@ -21,6 +21,7 @@
   /* Open/closed is a status, not the brand — it stays green and red even though
      the accent is blue, or the badge starts meaning nothing. */
   --ok: #3fb950;
+  --warn: #d29922;
   --route: #79c0ff;
   --scrim: rgba(6, 8, 10, .58);
   --lift: 0 16px 44px rgba(0, 0, 0, .55);
@@ -55,6 +56,7 @@
     --accent-ink: #ffffff;
     --danger: #b8443a;
     --ok: #1a7f37;
+    --warn: #8a6100;
     --route: #0969da;
     --scrim: rgba(88, 98, 112, .26);
     --lift: 0 14px 36px rgba(40, 50, 70, .13);
@@ -74,6 +76,7 @@
   --accent-ink: #ffffff;
   --danger: #b8443a;
   --ok: #1a7f37;
+  --warn: #8a6100;
   --route: #0969da;
   --scrim: rgba(88, 98, 112, .26);
   --lift: 0 14px 36px rgba(40, 50, 70, .13);
@@ -514,6 +517,51 @@ body.imagery .chip .dot { box-shadow: none; }
 .tag-row em { display: block; margin-top: 2px; font-style: normal; font-size: 11px; color: var(--fg-3); }
 .tag-row button { flex: none; padding: 0 4px; font-size: 17px; line-height: 1; color: var(--fg-3); }
 .tag-row button:hover { color: var(--danger); }
+
+/* Retired, not gone: it still has to be readable to be restored, so it is
+   dimmed and struck rather than hidden. */
+.tag-row.gone b { text-decoration: line-through; color: var(--fg-3); }
+.tag-row.gone .dot { background: var(--line-2); }
+
+/* ── the tag manager ─────────────────────────────────────────────────── */
+
+/* The key field is what lands in the JSON and in every place's `cat`, so it is
+   shown as the machine-readable thing it is rather than as prose. */
+#cat-key { font-family: var(--mono); font-size: 12px; }
+#cat-key:disabled { color: var(--fg-3); background: var(--bg-1); cursor: not-allowed; }
+
+#cat-tints { margin-top: 5px; }
+
+/* A colour close to one already in use is allowed — the map is still usable,
+   the two dots are just harder to tell apart — so this warns and does not
+   block. Sized to sit under the swatches without pushing the buttons away. */
+.cat-warn {
+  margin: 9px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--warn);
+}
+.cat-warn[hidden] { display: none; }
+
+.tag-form label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--fg);
+  cursor: pointer;
+}
+.tag-form label.check input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* Explains the checkbox above it, so it belongs to that line rather than
+   floating as a paragraph of its own. */
+.p-note.tight { margin-top: 5px; }
 
 button.linkish {
   padding: 0;

@@ -8,6 +8,8 @@ import { initPanel, showPoi, hidePanel } from './ui/panel'
 import { cycle as cycleTheme, current as themeChoice, onThemeChange, resolved } from './ui/theme'
 import { SITE, panBounds } from './config'
 import { registerServiceWorker, watchNetwork } from './ui/install'
+import * as tagger from './ui/tagger'
+import * as vocab from './ui/cats'
 
 const boot = document.getElementById('boot')!
 const base = import.meta.env.BASE_URL
@@ -30,15 +32,24 @@ async function start() {
   let counts: Record<string, number> = {}
 
   /**
-    * The committed places with local edits applied. Everything in
-    * data/curated/places.json is on the map before you touch anything, so
-    * editing mostly means changing one of those rather than one you made this
-    * session — the editor keeps those changes here until you export them.
-    */
-  let mergePlaces: (base: Poi[]) => Poi[] = (b) => b
+   * The tag vocabulary in force: what the build shipped, plus whatever the tag
+   * manager has changed in this browser. Held on `campus` itself rather than
+   * beside it, because the search index, the panel and the tagger all read
+   * `campus.categories` and all three must see the same set.
+   */
+  const shippedCats = campus.categories
+  const refreshCats = () => { campus.categories = vocab.mergeCategories(shippedCats) }
+  vocab.initCats(campus, () => counts)
+  refreshCats()
 
+  /**
+   * The committed places with local edits applied. Everything in
+   * data/curated/places.json is on the map before you touch anything, so
+   * editing mostly means changing one of those rather than one you made this
+   * session — the editor keeps those changes here until you export them.
+   */
   function refreshPoiList() {
-    pois = mergePlaces(campus.pois)
+    pois = tagger.applyEdits(campus.pois)
     byId = new Map(pois.map((p) => [p.id, p]))
     counts = {}
     for (const p of pois) counts[p.cat] = (counts[p.cat] ?? 0) + 1
@@ -285,8 +296,8 @@ async function start() {
 
   /* ── search ───────────────────────────────────────────────────────────── */
 
-  /** Commands the surveying tool registers for itself once it has loaded. */
-  const devActions: Record<string, () => void> = {}
+  /** Commands the editor registers for itself, once it is set up further down. */
+  const editorActions: Record<string, () => void> = {}
 
   const hooks = {
     onLayer: (cat: string) => {
@@ -297,7 +308,7 @@ async function start() {
       if (id === 'layers-all') { cats.forEach(([c]) => active.add(c)); refreshPois() }
       if (id === 'layers-none') { active.clear(); refreshPois() }
       if (id === 'imagery') setImagery(!imagery)
-      devActions[id]?.()
+      editorActions[id]?.()
     },
   }
 
@@ -362,254 +373,267 @@ async function start() {
   /* ── surveying ────────────────────────────────────────────────────────── */
 
   /**
-   * The tool the campus was surveyed with: mark a point, or trace an outline,
-   * name it, and export the lot into data/curated/places.json. That survey is
-   * done and committed, so it has no business on the published site — this
-   * whole block and the module it pulls in are dropped from a production build.
+   * The tool this map is surveyed with: mark a point, or trace an outline, name
+   * it, and export the lot into data/curated/places.json.
    *
-   * The dynamic import is what makes that true: a static one would keep the
-   * module in the bundle whatever the guard said, since it touches localStorage
-   * as it loads. It also keeps the await out of the production path, which is
-   * where it caused the map's `load` event to fire before its own handler on a
-   * warm start.
+   * It shipped, then it was taken off again once the campus survey was done,
+   * and now it is back — because the survey was not done. The wall was never
+   * the edge of what a student needs to find, and the locality outside it has
+   * to be walked and tapped the same way the inside was. Alongside it is the
+   * tag manager, which is the other half of the same lesson: the vocabulary
+   * turned out to be as wrong as the coverage.
+   *
+   * The import is static again. It was dynamic only to keep the module out of a
+   * production build, and the awaited chunk it introduced is what once let the
+   * map's `load` event fire before its own handler on a warm start. That bug is
+   * properly fixed by `whenMapReady`, which stays, but there is no reason to
+   * keep the await that caused it.
    */
-  if (import.meta.env.DEV) {
-    const tagger = await import('./ui/tagger')
-    tagger.initTagger(campus)
-    mergePlaces = tagger.applyEdits
+  tagger.initTagger(campus)
+  vocab.initCatUi()
 
-    let tagMode = false
-    let tool: 'point' | 'area' = 'point'
-    /** Vertices of the outline being traced, [lon, lat]. */
-    let draft: [number, number][] = []
-    /**
-     * A finished outline waiting for its marker. An outline and a marker are
-     * separate things — the outline is what a place occupies, the marker is
-     * where its dot belongs, which is the door or the counter far more often
-     * than it is the middle of the shape. So the marker is tapped, not derived.
-     */
-    let ringDone: [number, number][] | null = null
-    /** Set while an existing place's marker is being moved. */
-    let moving: string | null = null
+  let tagMode = false
+  let tool: 'point' | 'area' = 'point'
+  /** Vertices of the outline being traced, [lon, lat]. */
+  let draft: [number, number][] = []
+  /**
+   * A finished outline waiting for its marker. An outline and a marker are
+   * separate things — the outline is what a place occupies, the marker is
+   * where its dot belongs, which is the door or the counter far more often
+   * than it is the middle of the shape. So the marker is tapped, not derived.
+   */
+  let ringDone: [number, number][] | null = null
+  /** Set while an existing place's marker is being moved. */
+  let moving: string | null = null
 
-    const tagBtn = document.createElement('button')
-    tagBtn.id = 'tag-btn'
-    tagBtn.type = 'button'
-    tagBtn.setAttribute('aria-pressed', 'false')
-    tagBtn.setAttribute('aria-label', 'Add or edit places')
-    tagBtn.innerHTML = `
-      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-        <path d="M8 1.8 C5.5 1.8 3.6 3.7 3.6 6.1 C3.6 9.2 8 14.2 8 14.2 C8 14.2 12.4 9.2 12.4 6.1 C12.4 3.7 10.5 1.8 8 1.8 Z"
-              fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-        <path d="M8 4.4 V7.8 M6.3 6.1 H9.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-      </svg><span class="n"></span>`
-    document.getElementById('bar')!.insertBefore(tagBtn, document.getElementById('layers-btn'))
+  const tagBtn = document.createElement('button')
+  tagBtn.id = 'tag-btn'
+  tagBtn.type = 'button'
+  tagBtn.setAttribute('aria-pressed', 'false')
+  tagBtn.setAttribute('aria-label', 'Add or edit places')
+  tagBtn.innerHTML = `
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path d="M8 1.8 C5.5 1.8 3.6 3.7 3.6 6.1 C3.6 9.2 8 14.2 8 14.2 C8 14.2 12.4 9.2 12.4 6.1 C12.4 3.7 10.5 1.8 8 1.8 Z"
+            fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M8 4.4 V7.8 M6.3 6.1 H9.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </svg><span class="n"></span>`
+  document.getElementById('bar')!.insertBefore(tagBtn, document.getElementById('layers-btn'))
 
-    // The toolbar only exists while tagging, and says what the next tap will do.
-    const bar = document.createElement('div')
-    bar.id = 'tag-bar'
-    bar.hidden = true
-    document.body.append(bar)
+  // The toolbar only exists while tagging, and says what the next tap will do.
+  const bar = document.createElement('div')
+  bar.id = 'tag-bar'
+  bar.hidden = true
+  document.body.append(bar)
 
-    function paintTagBtn() {
-      const n = tagger.tagCount()
-      tagBtn.querySelector('.n')!.textContent = n ? String(n) : ''
-      tagBtn.setAttribute('aria-pressed', String(tagMode))
-      tagBtn.title = tagMode ? 'Editing — tap the map to add' : `Add or edit places${n ? ` · ${n} yours` : ''}`
-    }
-
-    function paintTagBar() {
-      bar.hidden = !tagMode
-      if (!tagMode) return
-
-      if (moving) {
-        bar.innerHTML = `<span class="say">tap where the marker goes</span>
-          <button data-draft-cancel class="x" aria-label="Cancel">&times;</button>`
-        return
-      }
-      if (ringDone) {
-        bar.innerHTML = `<span class="say">outline set · now tap where the marker goes</span>
-          <button data-marker-centre>use centre</button>
-          <button data-draft-cancel class="x" aria-label="Discard outline">&times;</button>`
-        return
-      }
-      bar.innerHTML = `
-        <span class="tools">
-          <button data-tool="point" class="${tool === 'point' ? 'on' : ''}">point</button>
-          <button data-tool="area" class="${tool === 'area' ? 'on' : ''}">area</button>
-        </span>
-        <span class="say">${
-          tool === 'point'
-            ? 'tap a spot · tap a place of yours to edit it'
-            : draft.length === 0 ? 'tap the corners of the outline'
-            : `${draft.length} point${draft.length === 1 ? '' : 's'}${draft.length < 3 ? ' · need 3' : ''}`
-        }</span>
-        ${tool === 'area' && draft.length ? `
-          <button data-draft-undo>undo</button>
-          <button data-draft-done class="primary" ${draft.length < 3 ? 'disabled' : ''}>finish</button>
-          <button data-draft-cancel class="x" aria-label="Discard outline">&times;</button>` : ''}`
-    }
-
-    /** The outline in progress — or the finished one still awaiting a marker. */
-    function paintDraft() {
-      const src = map.getSource('draft') as maplibregl.GeoJSONSource | undefined
-      if (!src) return
-      const ring = ringDone ?? draft
-      const features: GeoJSON.Feature[] = (ringDone ? [] : draft).map((c, i) => ({
-        type: 'Feature',
-        properties: { i },
-        geometry: { type: 'Point', coordinates: c },
-      }))
-      if (ring.length >= 2) {
-        features.push({
-          type: 'Feature',
-          properties: {},
-          geometry: { type: 'LineString', coordinates: [...ring, ring[0]!] },
-        })
-      }
-      if (ring.length >= 3) {
-        features.push({
-          type: 'Feature',
-          properties: {},
-          geometry: { type: 'Polygon', coordinates: [[...ring, ring[0]!]] },
-        })
-      }
-      src.setData({ type: 'FeatureCollection', features })
-    }
-
-    function setDraft(next: [number, number][]) {
-      draft = next
-      paintDraft()
-      paintTagBar()
-    }
-
-    function setTagMode(on: boolean) {
-      tagMode = on
-      document.body.classList.toggle('tagging', on)
-      if (!on) { ringDone = null; moving = null; setDraft([]) }
-      paintTagBtn()
-      paintTagBar()
-      // You cannot outline a building you cannot see.
-      if (on && !imagery) setImagery(true)
-    }
-
-    tagBtn.addEventListener('click', () => setTagMode(!tagMode))
-    paintTagBtn()
-
-    bar.addEventListener('click', (e) => {
-      const t = e.target as HTMLElement
-      const pick = t.closest('[data-tool]') as HTMLElement | null
-      if (pick) { tool = pick.dataset.tool as 'point' | 'area'; setDraft([]); return }
-      if (t.closest('[data-draft-undo]')) { setDraft(draft.slice(0, -1)); return }
-      if (t.closest('[data-draft-cancel]')) { ringDone = null; moving = null; setDraft([]); return }
-      if (t.closest('[data-draft-done]')) { finishArea(); return }
-      if (t.closest('[data-marker-centre]')) {
-        // For a building the marker is never drawn, so the middle is as good a
-        // place as any to hang search results and the fly-to off.
-        const r = ringDone
-        if (!r) return
-        openAreaForm(
-          r.reduce((a, c) => a + c[1], 0) / r.length,
-          r.reduce((a, c) => a + c[0], 0) / r.length,
-        )
-      }
-    })
-
-    function finishArea() {
-      if (draft.length < 3) return
-      ringDone = draft
-      draft = []
-      paintDraft()
-      paintTagBar()
-    }
-
-    /** The outline is settled and the marker has been chosen; name the thing. */
-    function openAreaForm(lat: number, lon: number) {
-      const ring = ringDone
-      if (!ring) return
-      ringDone = null
-      setDraft([])
-      tagger.showTagForm(lat, lon, undefined, () => setTagMode(false), ring)
-    }
-
-    tagger.onRequestMovePoint((id) => {
-      moving = id
-      if (!tagMode) setTagMode(true)
-      hidePanel()
-      paintTagBar()
-    })
-
-    // Handle for scripts/verify-browser.mjs, alongside __map: the list is
-    // otherwise only reachable by typing into search, which ranks a fuzzy place
-    // match above it and makes the test about ranking instead of about editing.
-    ;(window as unknown as { __openTagList: () => void }).__openTagList = () => tagger.showTagList()
-
-    devActions['tag-mode'] = () => setTagMode(!tagMode)
-    devActions['tags'] = () => tagger.showTagList()
-    devActions['tags-clear'] = () => tagger.clearAllTags()
-
-    map.on('click', (e) => {
-      if (!tagMode) return
-
-      // Moving an existing marker, or choosing one for an outline just drawn.
-      if (moving) {
-        tagger.movePoint(moving, e.lngLat.lng, e.lngLat.lat)
-        const id = moving
-        moving = null
-        paintTagBar()
-        tagger.showEditForm(id, () => setTagMode(false))
-        return
-      }
-      if (ringDone) { openAreaForm(e.lngLat.lat, e.lngLat.lng); return }
-
-      if (tool === 'area') {
-        setDraft([...draft, [+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]])
-        return
-      }
-
-      // Tapping something of your own edits it rather than stacking a second
-      // place on top — which is what you meant every time.
-      // Anything on the map can be edited — the committed places most of all,
-      // since they are what is already here.
-      const hit = map.queryRenderedFeatures(e.point, { layers: ['poi-dot', 'place-fill'] })[0]
-      const existing = hit?.properties?.id ? byId.get(hit.properties.id as string) : undefined
-      if (existing) { tagger.showEditForm(existing.id, () => setTagMode(false)); return }
-
-      const under = map.queryRenderedFeatures(e.point, { layers: ['building'] })[0]
-      tagger.showTagForm(e.lngLat.lat, e.lngLat.lng,
-                         (under?.properties?.name as string) || undefined,
-                         () => setTagMode(false))
-    })
-
-    // Categories that had something in them last time the map was painted.
-    let known = new Set(Object.keys(counts))
-
-    function applyEdits() {
-      refreshPoiList()
-      // Switch on a category the first time it gains a member, so a tag is
-      // never saved into an invisible layer — but leave the rest of the
-      // toggles alone, or every tag would undo what the user chose to look at.
-      for (const c of Object.keys(counts)) if (!known.has(c)) active.add(c)
-      for (const c of [...active]) if (!counts[c]) active.delete(c)
-      known = new Set(Object.keys(counts))
-
-      index = new SearchIndex(searchable(), hooks)
-      paintRail()
-      refreshPois()
-      paintTagBtn()
-    }
-
-    tagger.onTagsChange(applyEdits)
-
-    // Edits made in an earlier visit are already in storage by the time this
-    // module loads, which is after the first paint — without this the map would
-    // show the committed places until something else happened to redraw it, and
-    // your own changes would look like they had been lost.
-    if (tagger.tagCount()) applyEdits()
-
-    // The draft lives in the style, so a theme switch has to refill it.
-    onThemeChange(() => setTimeout(paintDraft, 0))
+  function paintTagBtn() {
+    const n = tagger.tagCount()
+    tagBtn.querySelector('.n')!.textContent = n ? String(n) : ''
+    tagBtn.setAttribute('aria-pressed', String(tagMode))
+    tagBtn.title = tagMode ? 'Editing — tap the map to add' : `Add or edit places${n ? ` · ${n} yours` : ''}`
   }
+
+  function paintTagBar() {
+    bar.hidden = !tagMode
+    if (!tagMode) return
+
+    if (moving) {
+      bar.innerHTML = `<span class="say">tap where the marker goes</span>
+        <button data-draft-cancel class="x" aria-label="Cancel">&times;</button>`
+      return
+    }
+    if (ringDone) {
+      bar.innerHTML = `<span class="say">outline set · now tap where the marker goes</span>
+        <button data-marker-centre>use centre</button>
+        <button data-draft-cancel class="x" aria-label="Discard outline">&times;</button>`
+      return
+    }
+    bar.innerHTML = `
+      <span class="tools">
+        <button data-tool="point" class="${tool === 'point' ? 'on' : ''}">point</button>
+        <button data-tool="area" class="${tool === 'area' ? 'on' : ''}">area</button>
+      </span>
+      <span class="say">${
+        tool === 'point'
+          ? 'tap a spot · tap a place of yours to edit it'
+          : draft.length === 0 ? 'tap the corners of the outline'
+          : `${draft.length} point${draft.length === 1 ? '' : 's'}${draft.length < 3 ? ' · need 3' : ''}`
+      }</span>
+      ${tool === 'area' && draft.length ? `
+        <button data-draft-undo>undo</button>
+        <button data-draft-done class="primary" ${draft.length < 3 ? 'disabled' : ''}>finish</button>
+        <button data-draft-cancel class="x" aria-label="Discard outline">&times;</button>` : ''}`
+  }
+
+  /** The outline in progress — or the finished one still awaiting a marker. */
+  function paintDraft() {
+    const src = map.getSource('draft') as maplibregl.GeoJSONSource | undefined
+    if (!src) return
+    const ring = ringDone ?? draft
+    const features: GeoJSON.Feature[] = (ringDone ? [] : draft).map((c, i) => ({
+      type: 'Feature',
+      properties: { i },
+      geometry: { type: 'Point', coordinates: c },
+    }))
+    if (ring.length >= 2) {
+      features.push({
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'LineString', coordinates: [...ring, ring[0]!] },
+      })
+    }
+    if (ring.length >= 3) {
+      features.push({
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'Polygon', coordinates: [[...ring, ring[0]!]] },
+      })
+    }
+    src.setData({ type: 'FeatureCollection', features })
+  }
+
+  function setDraft(next: [number, number][]) {
+    draft = next
+    paintDraft()
+    paintTagBar()
+  }
+
+  function setTagMode(on: boolean) {
+    tagMode = on
+    document.body.classList.toggle('tagging', on)
+    if (!on) { ringDone = null; moving = null; setDraft([]) }
+    paintTagBtn()
+    paintTagBar()
+    // You cannot outline a building you cannot see.
+    if (on && !imagery) setImagery(true)
+  }
+
+  tagBtn.addEventListener('click', () => setTagMode(!tagMode))
+  paintTagBtn()
+
+  bar.addEventListener('click', (e) => {
+    const t = e.target as HTMLElement
+    const pick = t.closest('[data-tool]') as HTMLElement | null
+    if (pick) { tool = pick.dataset.tool as 'point' | 'area'; setDraft([]); return }
+    if (t.closest('[data-draft-undo]')) { setDraft(draft.slice(0, -1)); return }
+    if (t.closest('[data-draft-cancel]')) { ringDone = null; moving = null; setDraft([]); return }
+    if (t.closest('[data-draft-done]')) { finishArea(); return }
+    if (t.closest('[data-marker-centre]')) {
+      // For a building the marker is never drawn, so the middle is as good a
+      // place as any to hang search results and the fly-to off.
+      const r = ringDone
+      if (!r) return
+      openAreaForm(
+        r.reduce((a, c) => a + c[1], 0) / r.length,
+        r.reduce((a, c) => a + c[0], 0) / r.length,
+      )
+    }
+  })
+
+  function finishArea() {
+    if (draft.length < 3) return
+    ringDone = draft
+    draft = []
+    paintDraft()
+    paintTagBar()
+  }
+
+  /** The outline is settled and the marker has been chosen; name the thing. */
+  function openAreaForm(lat: number, lon: number) {
+    const ring = ringDone
+    if (!ring) return
+    ringDone = null
+    setDraft([])
+    tagger.showTagForm(lat, lon, undefined, () => setTagMode(false), ring)
+  }
+
+  tagger.onRequestMovePoint((id) => {
+    moving = id
+    if (!tagMode) setTagMode(true)
+    hidePanel()
+    paintTagBar()
+  })
+
+  // Handle for scripts/verify-browser.mjs, alongside __map: the list is
+  // otherwise only reachable by typing into search, which ranks a fuzzy place
+  // match above it and makes the test about ranking instead of about editing.
+  ;(window as unknown as { __openTagList: () => void }).__openTagList = () => tagger.showTagList()
+  ;(window as unknown as { __openCatList: () => void }).__openCatList = () => vocab.showCatList()
+
+  editorActions['tag-mode'] = () => setTagMode(!tagMode)
+  editorActions['places'] = () => tagger.showTagList()
+  editorActions['tags'] = () => vocab.showCatList()
+  editorActions['tags-clear'] = () => tagger.clearAllTags()
+
+  map.on('click', (e) => {
+    if (!tagMode) return
+
+    // Moving an existing marker, or choosing one for an outline just drawn.
+    if (moving) {
+      tagger.movePoint(moving, e.lngLat.lng, e.lngLat.lat)
+      const id = moving
+      moving = null
+      paintTagBar()
+      tagger.showEditForm(id, () => setTagMode(false))
+      return
+    }
+    if (ringDone) { openAreaForm(e.lngLat.lat, e.lngLat.lng); return }
+
+    if (tool === 'area') {
+      setDraft([...draft, [+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]])
+      return
+    }
+
+    // Tapping something of your own edits it rather than stacking a second
+    // place on top — which is what you meant every time.
+    // Anything on the map can be edited — the committed places most of all,
+    // since they are what is already here.
+    const hit = map.queryRenderedFeatures(e.point, { layers: ['poi-dot', 'place-fill'] })[0]
+    const existing = hit?.properties?.id ? byId.get(hit.properties.id as string) : undefined
+    if (existing) { tagger.showEditForm(existing.id, () => setTagMode(false)); return }
+
+    const under = map.queryRenderedFeatures(e.point, { layers: ['building'] })[0]
+    tagger.showTagForm(e.lngLat.lat, e.lngLat.lng,
+                       (under?.properties?.name as string) || undefined,
+                       () => setTagMode(false))
+  })
+
+  // Categories that had something in them last time the map was painted.
+  let known = new Set(Object.keys(counts))
+
+  function applyEdits() {
+    refreshPoiList()
+    // Switch on a category the first time it gains a member, so a tag is
+    // never saved into an invisible layer — but leave the rest of the
+    // toggles alone, or every tag would undo what the user chose to look at.
+    for (const c of Object.keys(counts)) if (!known.has(c)) active.add(c)
+    for (const c of [...active]) if (!counts[c]) active.delete(c)
+    known = new Set(Object.keys(counts))
+
+    index = new SearchIndex(searchable(), hooks)
+    paintRail()
+    refreshPois()
+    paintTagBtn()
+  }
+
+  tagger.onTagsChange(applyEdits)
+
+  /**
+   * A tag change moves more than a tag: a retired category takes its places
+   * with it, a renamed one changes what search matches, and a recoloured one
+   * changes every dot in that layer. So the whole pipeline is rebuilt, exactly
+   * as it is for a place edit — starting with the merged set itself, which
+   * everything downstream reads off `campus`.
+   */
+  vocab.onCatsChange(() => { refreshCats(); applyEdits() })
+
+  // Edits made in an earlier visit are already in storage by the time this
+  // module loads, which is after the first paint — without this the map would
+  // show the committed places until something else happened to redraw it, and
+  // your own changes would look like they had been lost.
+  if (tagger.tagCount()) applyEdits()
+
+  // The draft lives in the style, so a theme switch has to refill it.
+  onThemeChange(() => setTimeout(paintDraft, 0))
 
   /* ── chrome ───────────────────────────────────────────────────────────── */
 

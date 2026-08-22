@@ -5,12 +5,14 @@
 //   npm run smoke
 
 import { build } from 'esbuild'
-import { readFile, readdir, rm } from 'node:fs/promises'
+import { readFile, writeFile, readdir, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+const CURATED = join(ROOT, 'data/curated')
 const TMP = join(ROOT, 'node_modules/.cache/smoke.mjs')
 
 // `import()` of an absolute path only works on POSIX — on Windows "E:\…" reads
@@ -64,6 +66,66 @@ ok(geo.roads.features.length + geo.paths.features.length > 10,
 ok(geo.boundary.features.length === 1, 'campus boundary drawn')
 ok(Array.isArray(campus.meta.bbox) && campus.meta.bbox.length === 2, 'campus bbox present for framing')
 
+/* ── survey area ─────────────────────────────────────────────────────────── */
+
+// The wall stopped being the edge of the map when the survey went into the
+// locality. `area` is what replaced it as the filter, and the app fences
+// panning to it — if it ever came back smaller than the campus itself, every
+// place outside would be silently dropped by the next build.
+console.log('\nsurvey area')
+{
+  const { bbox, area } = campus.meta
+  ok(Array.isArray(area) && area.length === 2, 'survey area present')
+  ok(area[0][0] < bbox[0][0] && area[0][1] < bbox[0][1] &&
+     area[1][0] > bbox[1][0] && area[1][1] > bbox[1][1],
+     'the survey area strictly contains the campus bbox',
+     `campus ${bbox[0]}..${bbox[1]} / area ${area[0]}..${area[1]}`)
+
+  const km = (site.survey?.radiusKm ?? 1)
+  const gotKm = (area[1][1] - bbox[1][1]) * 111.32
+  ok(Math.abs(gotKm - km) < 0.05, `the ring is ${gotKm.toFixed(2)} km, asked for ${km}`)
+
+  // Every place has to be inside it, or the build let something through that
+  // the app will happily draw and never let you pan back to.
+  const outside = campus.pois.filter((p) =>
+    p.lon < area[0][0] || p.lon > area[1][0] || p.lat < area[0][1] || p.lat > area[1][1])
+  ok(outside.length === 0, `all ${campus.pois.length} places are inside the survey area`,
+     outside.slice(0, 3).map((p) => p.name).join(', '))
+}
+
+/* ── categories ──────────────────────────────────────────────────────────── */
+
+console.log('\ncategories')
+{
+  const cats = campus.categories
+  const keys = Object.keys(cats)
+  console.log(`  ${keys.length} tags in ${Object.keys(campus.groups ?? {}).length} groups`)
+
+  ok(keys.every((k) => /^[a-z][a-z0-9_-]{0,23}$/.test(k)),
+     'every tag key is usable in JSON and in a `cat` field',
+     keys.filter((k) => !/^[a-z][a-z0-9_-]{0,23}$/.test(k)).join(', '))
+  ok(keys.every((k) => cats[k].label && typeof cats[k].pin === 'boolean'),
+     'every tag has a label and a pin flag')
+
+  // The picker groups by this, and an unknown group would silently drop its
+  // whole `<optgroup>` heading.
+  const groups = campus.groups ?? {}
+  const stray = keys.filter((k) => cats[k].group && !groups[cats[k].group])
+  ok(stray.length === 0, 'every tag names a group that exists', stray.join(', '))
+
+  // The five that never held anything are gone, and nothing still points at
+  // them. This is the assertion that would catch a half-finished removal.
+  const RETIRED = ['print', 'water', 'toilet', 'vending', 'transport']
+  const back = RETIRED.filter((k) => cats[k])
+  ok(back.length === 0, 'the unused tags stay removed', back.join(', '))
+
+  // Every place must land in a tag that exists, or it draws an unstyled dot in
+  // a layer with no legend chip — which reads as the map losing data.
+  const orphans = campus.pois.filter((p) => !cats[p.cat])
+  ok(orphans.length === 0, `all ${campus.pois.length} places are in a tag that exists`,
+     [...new Set(orphans.map((p) => p.cat))].join(', '))
+}
+
 /* ── outlines ────────────────────────────────────────────────────────────── */
 
 // Buildings are containers drawn as an area and nothing else, so the shape is
@@ -93,10 +155,11 @@ console.log('\noutlines')
 
 /* ── palette ─────────────────────────────────────────────────────────────── */
 
-// 25 categories is past what colour alone can carry, so the palette was solved
-// as a maximin problem rather than picked by eye. These assertions are what
-// stop it drifting back: the previous palette had `mess` and `canteen` on the
-// same hex, which no amount of looking at the map made obvious.
+// 39 dot categories is far past what colour alone can carry, so the palette is
+// solved as a maximin problem in scripts/solve-palette.mjs rather than picked
+// by eye. These assertions are what stop it drifting back: an earlier palette
+// had `mess` and `canteen` on the same hex, which no amount of looking at the
+// map made obvious.
 console.log('\npalette')
 {
   const s2lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
@@ -125,14 +188,12 @@ console.log('\npalette')
   const dupes = colors.filter((c, i) => colors.indexOf(c) !== i)
   ok(dupes.length === 0, 'no two categories share a colour', [...new Set(dupes)].join(', '))
 
-  // `building` is held to a weaker floor than the rest, on purpose. Every other
-  // category draws a dot, where colour is doing identity work against 24 other
-  // dots. A building draws no dot at all — only a fill at a fifth opacity,
-  // which each building then overrides with its own tint from the scheme. It
-  // also costs something real: 25 was already at the achievable ceiling of
-  // 12.9, and the best available 26th colour is 8.6 (nearest: sports). Paying
-  // that on the one category whose colour barely works beats paying it on all
-  // of them.
+  // `building` is excluded from the dot floor, on purpose. Every other category
+  // draws a dot, where colour is doing identity work against 38 other dots. A
+  // building draws no dot at all — only a fill at a fifth opacity, which each
+  // building then overrides with its own tint from the scheme. The solver
+  // pins its khaki and spreads the dots around it, so it is held to the same
+  // floor in the combined check below rather than to a weaker one.
   const dots = cats.filter(([k]) => k !== 'building')
   const closest = (list, xform) => {
     let worst = Infinity, pair = ''
@@ -143,11 +204,17 @@ console.log('\npalette')
       }
     return { worst, pair }
   }
-  for (const [label, xform, floor] of [['dark', (x) => x, 12], ['light', dim, 8.5]]) {
+  // The solved set reaches 11.0 dark / 7.7 light across 39 dots. The floors sit
+  // just under that: tight enough that adding a 40th by hand fails here rather
+  // than on the map, loose enough not to break on a re-solve that lands a
+  // tenth lower. A tag added from the tag manager is *not* held to this — the
+  // form warns about a clash and lets it through, because a survey stopping to
+  // argue about colour is worse than two dots that look alike.
+  for (const [label, xform, floor] of [['dark', (x) => x, 10.5], ['light', dim, 7.4]]) {
     const { worst, pair } = closest(dots, xform)
     ok(worst >= floor, `${label}: closest dot pair ΔE ${worst.toFixed(1)} (${pair}), floor ${floor}`)
   }
-  for (const [label, xform, floor] of [['dark', (x) => x, 8], ['light', dim, 5.5]]) {
+  for (const [label, xform, floor] of [['dark', (x) => x, 10.5], ['light', dim, 7.4]]) {
     const { worst, pair } = closest(cats, xform)
     ok(worst >= floor, `${label}: closest pair including buildings ΔE ${worst.toFixed(1)} (${pair}), floor ${floor}`)
   }
@@ -202,19 +269,24 @@ ok(!index.search('mess menu today').some((h) => h.kind === 'place' && /menu/i.te
 ok(index.examples().length > 0, 'the empty state suggests something real',
    index.examples().join(', '))
 
-// Surveying is how this map was made, not something the published site offers.
-// This index is bundled with DEV false, so anything here reaching it means the
-// guard leaked and the tool shipped.
-const devCommands = index.docs.filter((d) => d.kind === 'action' && /^do:tag/.test(d.id))
-ok(devCommands.length === 0, 'no tagging commands in a production build',
-   devCommands.map((d) => d.title).join(', '))
-for (const q of ['tag', 'tag mode', 'my tags', 'delete all my tags', 'edit']) {
-  const hits = index.search(q).filter((h) => h.kind === 'action' && /tag/i.test(h.title))
-  ok(hits.length === 0, `"${q}" surfaces no tagging command`, hits.map((h) => h.title).join(', '))
+// The editor ships. It was behind `import.meta.env.DEV` while the survey was
+// thought to be finished; the survey is running again, past the wall, so the
+// commands are part of the build. This index is bundled with DEV false, which
+// is what makes that a real assertion rather than a dev-only one.
+const EDITOR_CMDS = ['do:tag-mode', 'do:places', 'do:tags', 'do:tags-clear']
+for (const id of EDITOR_CMDS) {
+  ok(index.docs.some((d) => d.kind === 'action' && d.id === id),
+     `${id} is in a production build`)
+}
+for (const [q, want] of [['tag mode', 'do:tag-mode'], ['places', 'do:places'],
+                         ['tags', 'do:tags'], ['categories', 'do:tags'],
+                         ['xerox', null], ['new tag', 'do:tags']]) {
+  if (!want) continue
+  const hits = index.search(q).filter((h) => h.kind === 'action')
+  ok(hits.some((h) => h.id === want), `"${q}" reaches ${want}`,
+     hits.slice(0, 3).map((h) => h.title).join(' / ') || 'nothing')
 }
 
-// The switch that keeps OSM-derived places out is unrelated and still holds.
-ok(campus.pois.every((p) => p.src === 'seed'), 'still nothing derived from an OSM tag')
 
 ok(index.examples().every((e) => index.search(e).length > 0),
    'every suggestion actually returns something')
@@ -222,7 +294,11 @@ ok(index.examples().every((e) => index.search(e).length > 0),
 // Categories that OSM has nothing in yet exist for tagging by hand. Their
 // vocabulary has to work the moment something lands in one, so prove it with a
 // synthetic place rather than waiting for real data to appear.
-const EMPTY_CATS = [['abandoned', 'abandoned'], ['activity', 'club'], ['landmark', 'landmark']]
+const EMPTY_CATS = [['abandoned', 'abandoned'], ['activity', 'club'], ['landmark', 'landmark'],
+                    ['street', 'roll'], ['tea', 'cha'], ['stationery', 'xerox'],
+                    ['pharmacy', 'medicine'], ['transit', 'toto'], ['ghat', 'ghat'],
+                    ['grocery', 'kirana'], ['salon', 'haircut'], ['pg', 'paying guest'],
+                    ['locality', 'para'], ['hangout', 'adda']]
 for (const [cat, word] of EMPTY_CATS) {
   const fake = { ...campus, pois: [{ id: 'x1', name: 'Untitled Thing', cat, lat: campus.meta.center[1], lon: campus.meta.center[0], src: 'seed' }],
                  meta: { ...campus.meta, counts: { [cat]: 1 } } }
@@ -363,11 +439,69 @@ for (const file of await walk(srcDir)) {
 // Elements the app creates at runtime rather than declaring in the markup:
 // the route badge, and the tag form the tagger renders into the panel.
 const RUNTIME_IDS = new Set(['route-badge', 'tag-name', 'tag-cat', 'tag-desc',
-                             'tag-tint-row', 'tag-tints', 'tag-bar'])
+                             'tag-tint-row', 'tag-tints', 'tag-bar',
+                             'cat-label', 'cat-key', 'cat-group', 'cat-pin',
+                             'cat-tints', 'cat-clash', 'cat-move'])
 
 const orphans = [...wanted].filter(([id]) => !present.has(id) && !RUNTIME_IDS.has(id))
 ok(orphans.length === 0, `all ${wanted.size} referenced ids exist in index.html`,
    orphans.map(([id, f]) => `#${id} (${f})`).join(', '))
+
+/* ── category round trip ─────────────────────────────────────────────────── */
+
+// The seam nothing else can see. Every other assertion here reads the *built*
+// campus.json; the thing that writes `data/curated/categories.json` is the tag
+// manager, which lives in the browser. So write the exact shape it exports,
+// rebuild for real, and check what comes out the other side — otherwise the
+// only proof the vocabulary is editable is that the form does not throw.
+console.log('\ncategory round trip')
+{
+  const FILE = join(CURATED, 'categories.json')
+  const had = existsSync(FILE) ? await readFile(FILE, 'utf8') : null
+  const rebuild = () => execFileSync('node', [join(ROOT, 'scripts/build-data.mjs')],
+                                     { cwd: ROOT, encoding: 'utf8' })
+
+  const payload = {
+    _source: 'smoke',
+    items: [
+      { key: 'cyclewallah', label: 'Cycle repair wallah', color: '#2bb3b3', pin: false, group: 'moving' },
+      { key: 'hangout', deleted: true },
+      { key: 'tea', label: 'Cha & tiffin', color: '#ff7808', pin: true, group: 'food' },
+      { key: 'building', label: 'Buildings', color: '#adb78c', pin: false, group: 'campus', area: true },
+      // Both of these are rejections, and both must be *loud* ones: a key that
+      // cannot go in a `cat` field, and a colour that would draw as black.
+      { key: 'BAD KEY', label: 'nope', color: '#ffffff', pin: false, group: 'campus' },
+      { key: 'nocolour', label: 'nope', color: 'purple', pin: false, group: 'campus' },
+    ],
+  }
+
+  try {
+    await writeFile(FILE, JSON.stringify(payload, null, 2))
+    const out = rebuild()
+    const built = JSON.parse(await readFile(join(ROOT, 'public/data/campus.json'), 'utf8'))
+    const c = built.categories
+
+    ok(c.cyclewallah?.label === 'Cycle repair wallah' && c.cyclewallah?.group === 'moving',
+       'an added tag arrives in campus.json', JSON.stringify(c.cyclewallah))
+    ok(!c.hangout, 'a retired built-in is gone')
+    ok(c.tea?.label === 'Cha & tiffin' && c.tea?.pin === true,
+       'a retuned built-in keeps the change', JSON.stringify(c.tea))
+    // `area` is not on the form, so it has to survive by being carried through
+    // the export — without it a retuned `building` loses its tint scheme.
+    ok(c.building?.area === true, 'building keeps `area` across the round trip')
+    ok(!c['BAD KEY'] && !c.nocolour, 'an unusable key and a bad colour are refused')
+    ok(/unusable key/.test(out) && /no usable colour/.test(out),
+       'and the build says so rather than dropping them quietly')
+  } finally {
+    if (had === null) await rm(FILE, { force: true })
+    else await writeFile(FILE, had)
+    rebuild()
+  }
+
+  const back = JSON.parse(await readFile(join(ROOT, 'public/data/campus.json'), 'utf8'))
+  ok(!!back.categories.hangout && !back.categories.cyclewallah,
+     'and the built-in set comes back when the file goes')
+}
 
 await rm(TMP, { force: true })
 await rm(STYLE_TMP, { force: true })

@@ -38,6 +38,10 @@ export interface Category {
   label: string
   color: string
   pin: boolean
+  /** Sorts the picker in the editor. A key of Campus['groups']. */
+  group?: string
+  /** Drawn as its outline alone, with no dot and no label. */
+  area?: true
 }
 
 export interface Campus {
@@ -48,11 +52,19 @@ export interface Campus {
     center: [number, number]
     /** Bounding box of the campus boundary: [[west, south], [east, north]]. */
     bbox: [[number, number], [number, number]]
+    /**
+     * The survey area — the campus plus site.config's `survey.radiusKm`. This
+     * is how far out a place may be tagged, and what panning is fenced to. The
+     * opening view is still `bbox`: the campus, not the district around it.
+     */
+    area: [[number, number], [number, number]]
     attribution: string
     osmWay: number
     counts: Record<string, number>
   }
   categories: Record<string, Category>
+  /** Group key -> heading, for sorting the category picker in the editor. */
+  groups?: Record<string, string>
   pois: Poi[]
   places?: { items: Poi[] }
 }

@@ -28,7 +28,11 @@ const KM = 1 / 111.32
 const SLACK_KM = 5
 
 /**
- * Panning limits: the campus plus five kilometres in every direction.
+ * Panning limits: the survey area plus five kilometres in every direction.
+ *
+ * The base is `meta.area` rather than `meta.bbox` now that places live outside
+ * the wall — fencing to the campus would let you tag the far side of the ring
+ * only by fighting the map back there every time it sprang shut.
  *
  * The slack is deliberately generous, and the previous value — a third of the
  * campus's own span — was the cause of a real bug worth recording. MapLibre
@@ -47,7 +51,7 @@ const SLACK_KM = 5
  * stops you panning to another city while the framing decides the view.
  */
 export function panBounds(campus: Campus): Box {
-  const [[w, s], [e, n]] = campus.meta.bbox
+  const [[w, s], [e, n]] = campus.meta.area ?? campus.meta.bbox
   const padY = SLACK_KM * KM
   // Longitude degrees are shorter than latitude ones away from the equator.
   const padX = padY / Math.max(Math.cos(((s + n) / 2) * Math.PI / 180), 0.2)

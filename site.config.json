@@ -13,6 +13,11 @@
     "fromOsm": false
   },
 
+  "survey": {
+    "_note": "How far past the campus wall a place may be tagged, in kilometres. The wall is not the edge of the map any more — the chemist, the roll shop and the toto stand are all outside it — but something has to reject a fat-fingered tap two districts away, and this is it. Framing still opens on the campus itself; this only governs how far you may pan-and-tag, and what the build accepts.",
+    "radiusKm": 1
+  },
+
   "osm": {
     "campusWay": 52097578,
     "wikidata": "Q3348743",

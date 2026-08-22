@@ -1,5 +1,6 @@
-import type { Campus, Poi } from '../types'
+import type { Campus, Category, Poi } from '../types'
 import { panelShell } from './panel'
+import { catOptions, mergeCategories, onReassign } from './cats'
 
 /**
  * Tag places the map does not know about yet.
@@ -228,9 +229,29 @@ export function exportJson(): string {
 let campus: Campus
 let onDone: (() => void) | null = null
 
+/** The shipped categories with the tag manager's local edits applied. */
+export const categories = (): Record<string, Category> => mergeCategories(campus.categories)
+
 export function initTagger(c: Campus) {
   campus = c
   base = c.pois
+
+  // Removing a tag has to take its places somewhere; this is the somewhere.
+  onReassign((from, to) => {
+    const moved = applyEdits(base).filter((p) => p.cat === from)
+    const on = new Date().toISOString().slice(0, 10)
+    for (const p of moved) {
+      const prev = tags.find((t) => t.id === p.id)
+      tags = [...tags.filter((t) => t.id !== p.id), {
+        id: p.id, name: p.name, cat: to, lat: p.lat, lon: p.lon,
+        ...(p.poly?.length ? { poly: p.poly } : {}),
+        ...(p.color ? { color: p.color } : {}),
+        ...(p.desc ? { desc: p.desc } : {}),
+        on: prev?.on ?? (p as { surveyed?: string }).surveyed ?? on,
+      }]
+    }
+    if (moved.length) write()
+  })
 
   const panel = document.getElementById('panel')!
   panel.addEventListener('click', (e) => {
@@ -273,10 +294,13 @@ interface Pending {
 let pending: Pending | null = null
 
 function form(title: string, kind: string, t: Partial<Tag>, near?: string) {
-  const cat = t.cat ?? (t.poly ? 'building' : 'academic')
-  const options = Object.entries(campus.categories)
-    .map(([k, v]) => `<option value="${k}"${k === cat ? ' selected' : ''}>${esc(v.label)}</option>`)
-    .join('')
+  const cats = categories()
+  // Fall back to whatever exists rather than a hard-coded key: 'academic' can
+  // be retired from the tag manager like anything else.
+  const first = Object.keys(cats)[0] ?? 'academic'
+  const want = t.cat ?? (t.poly ? 'building' : 'academic')
+  const cat = cats[want] ? want : first
+  const options = catOptions(cats, cat)
   const chosen = t.color ?? TINTS[0]![0]
   const swatches = TINTS.map(([hex, label]) =>
     `<button type="button" class="swatch${hex === chosen ? ' on' : ''}" data-tint="${hex}"
@@ -320,7 +344,10 @@ function form(title: string, kind: string, t: Partial<Tag>, near?: string) {
   // only appears for a building.
   const sel = document.getElementById('tag-cat') as HTMLSelectElement
   const row = document.getElementById('tag-tint-row') as HTMLElement
-  const syncTint = () => { row.hidden = sel.value !== 'building' }
+  // The tint scheme is for telling one area apart from the next, so it belongs
+  // to whichever categories draw as an area — `building` by default, but the
+  // tag manager can mark others.
+  const syncTint = () => { row.hidden = !cats[sel.value]?.area }
   sel.addEventListener('change', syncTint)
   syncTint()
 
@@ -389,7 +416,7 @@ function save() {
     lat: +pending.lat.toFixed(6),
     lon: +pending.lon.toFixed(6),
     ...(pending.poly?.length ? { poly: pending.poly } : {}),
-    ...(cat === 'building' && tint ? { color: tint } : {}),
+    ...(categories()[cat]?.area && tint ? { color: tint } : {}),
     ...(desc ? { desc } : {}),
     // Keep the original survey date when editing: it says when the ground was
     // seen, not when the typo was fixed.
@@ -413,6 +440,7 @@ function hide() {
 }
 
 export function showTagList() {
+  const cats = categories()
   const local = new Map(tags.map((t) => [t.id, t]))
   const places = applyEdits(base)
   const retired = tags.filter((t) => t.deleted)
@@ -422,10 +450,10 @@ export function showTagList() {
     const t = local.get(p.id)
     return `
       <div class="tag-row">
-        <span class="dot" style="background:${p.color ?? campus.categories[p.cat]?.color ?? '#8b949e'}"></span>
+        <span class="dot" style="background:${p.color ?? cats[p.cat]?.color ?? '#8b949e'}"></span>
         <span class="tag-main">
           <b>${esc(p.name)}</b>
-          <em>${esc(campus.categories[p.cat]?.label ?? p.cat)}${p.poly?.length ? ' · area' : ''}${
+          <em>${esc(cats[p.cat]?.label ?? `${p.cat} — retired tag`)}${p.poly?.length ? ' · area' : ''}${
             t ? (isBase(p.id) ? ' · changed' : ' · added') : ''}</em>
         </span>
         <button class="linkish" data-tag-edit="${esc(p.id)}" aria-label="Edit ${esc(p.name)}">edit</button>
@@ -451,10 +479,11 @@ export function showTagList() {
       : `<p class="p-note">Nothing changed yet. Edit any place below, or tap one
          on the map with the surveying tool on.</p>`}
 
-    ${changed ? `<div class="p-actions">
-      <button data-tag-export class="primary">Download places.json</button>
-      <button data-tag-copy>Copy</button>
-    </div>` : ''}
+    <div class="p-actions">
+      ${changed ? `<button data-tag-export class="primary">Download places.json</button>
+      <button data-tag-copy>Copy</button>` : ''}
+      <button data-cat-list>Tags</button>
+    </div>
 
     ${retiredRows}
     <div class="p-sec">On the map</div>

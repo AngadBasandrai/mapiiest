@@ -74,7 +74,7 @@ function actions(lat: number, lon: number, id: string) {
   return `<div class="p-actions">
     <a class="primary" target="_blank" rel="noopener"
        href="https://www.google.com/maps/dir/?api=1&amp;destination=${dest}">Route in Google Maps</a>
-    ${import.meta.env.DEV ? `<button data-tag-edit="${esc(id)}">Edit</button>` : ''}
+    <button data-tag-edit="${esc(id)}">Edit</button>
   </div>`
 }
 
@@ -105,12 +105,9 @@ export function showPoi(p: Poi) {
       ['Near', p.near ? esc(p.near) : undefined],
     ]),
     p.desc ? `<p class="p-note">${esc(p.desc)}</p>` : '',
-    // `p.user` is only ever set by the dev-only tagger, so this branch cannot be
-    // reached in a build — the guard is what keeps its wording out of the
-    // bundle, rather than shipping dead text about a feature the site lacks.
     p.user
       ? `<p class="src">Changed in this browser and not yet committed. See every
-         change in <button data-tag-list class="linkish">My tags</button>, or
+         change in <button data-tag-list class="linkish">Places</button>, or
          <a href="https://www.openstreetmap.org/edit#map=19/${p.lat.toFixed(5)}/${p.lon.toFixed(5)}"
             target="_blank" rel="noopener">put it on OpenStreetMap →</a></p>`
       : `<p class="src">${p.src === 'osm'
