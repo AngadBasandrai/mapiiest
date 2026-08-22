@@ -206,15 +206,37 @@ console.log('\npalette')
   }
   // One ground now, so one floor. The solved set reaches 11.0 across 39 dots
   // and the ceiling for a dark-only solve is 11.2, so this sits just under
-  // both: tight enough that adding a 40th by hand fails here rather than on
-  // the map, loose enough not to break on a re-solve that lands a tenth lower.
-  // A tag added from the tag manager is *not* held to this — the form warns
-  // about a clash and lets it through, because a survey stopping to argue
-  // about colour is worse than two dots that look alike.
+  // both: tight enough that a change to the solved palette fails here rather
+  // than on the map, loose enough not to break on a re-solve that lands a
+  // tenth lower.
+  //
+  // The floor binds on the *solved* set only. A tag coloured by hand from the
+  // tag manager is held to no colour rule at all — the form warns about a
+  // clash and lets it through, because a survey stopping to argue about colour
+  // is worse than two dots that look alike, and a red build over somebody's
+  // choice of swatch is worse than both. Those are reported below instead, so
+  // the clash is visible without being an error.
   const FLOOR = 10.5
-  for (const [label, list] of [['dots only', dots], ['with buildings', cats]]) {
+  const byHand = new Set(
+    (existsSync(join(CURATED, 'categories.json'))
+      ? JSON.parse(await readFile(join(CURATED, 'categories.json'), 'utf8')).items ?? []
+      : []
+    ).filter((c) => !c.deleted).map((c) => c.key))
+
+  const solved = cats.filter(([k]) => !byHand.has(k))
+  const solvedDots = solved.filter(([k]) => k !== 'building')
+  for (const [label, list] of [['dots only', solvedDots], ['with buildings', solved]]) {
     const { worst, pair } = closest(list)
-    ok(worst >= FLOOR, `${label}: closest pair ΔE ${worst.toFixed(1)} (${pair}), floor ${FLOOR}`)
+    ok(worst >= FLOOR, `solved palette, ${label}: closest pair ΔE ${worst.toFixed(1)} (${pair}), floor ${FLOOR}`)
+  }
+
+  if (byHand.size) {
+    const { worst, pair } = closest(cats)
+    console.log(`  note ${byHand.size} tag(s) coloured by hand; closest pair overall ΔE ${worst.toFixed(1)} (${pair})`)
+    if (worst < FLOOR) {
+      console.log(`       under the ${FLOOR} the solver holds to — legible, but those two are hard to tell apart.`)
+      console.log(`       Recolour either in the tag manager if it matters.`)
+    }
   }
 }
 
@@ -267,22 +289,24 @@ ok(!index.search('mess menu today').some((h) => h.kind === 'place' && /menu/i.te
 ok(index.examples().length > 0, 'the empty state suggests something real',
    index.examples().join(', '))
 
-// The editor ships. It was behind `import.meta.env.DEV` while the survey was
-// thought to be finished; the survey is running again, past the wall, so the
-// commands are part of the build. This index is bundled with DEV false, which
-// is what makes that a real assertion rather than a dev-only one.
-const EDITOR_CMDS = ['do:tag-mode', 'do:places', 'do:tags', 'do:tags-clear']
-for (const id of EDITOR_CMDS) {
-  ok(index.docs.some((d) => d.kind === 'action' && d.id === id),
-     `${id} is in a production build`)
+// Surveying is how this map gets its places, not something the published site
+// offers. This index is bundled with DEV false, so anything here reaching it
+// means the guard leaked and the tool shipped.
+const editorCmds = index.docs.filter((d) => d.kind === 'action' &&
+  ['do:tag-mode', 'do:places', 'do:tags', 'do:tags-clear'].includes(d.id))
+ok(editorCmds.length === 0, 'no editor commands in a production build',
+   editorCmds.map((d) => d.title).join(', '))
+for (const q of ['tag', 'tag mode', 'places', 'tags', 'categories', 'new tag', 'edit']) {
+  const hits = index.search(q).filter((h) => h.kind === 'action' &&
+    /tag|place|categor/i.test(h.title))
+  ok(hits.length === 0, `"${q}" surfaces no editor command`, hits.map((h) => h.title).join(', '))
 }
-for (const [q, want] of [['tag mode', 'do:tag-mode'], ['places', 'do:places'],
-                         ['tags', 'do:tags'], ['categories', 'do:tags'],
-                         ['xerox', null], ['new tag', 'do:tags']]) {
-  if (!want) continue
-  const hits = index.search(q).filter((h) => h.kind === 'action')
-  ok(hits.some((h) => h.id === want), `"${q}" reaches ${want}`,
-     hits.slice(0, 3).map((h) => h.title).join(' / ') || 'nothing')
+
+// The vocabulary still has to be searchable — the *layers* are what a visitor
+// types these words for, and those are not going anywhere.
+for (const [q, cat] of [['xerox', 'stationery'], ['roll', 'street'], ['cha', 'tea']]) {
+  if (!campus.meta.counts[cat]) continue
+  ok(index.search(q).some((h) => h.cat === cat), `"${q}" still reaches the ${cat} layer`)
 }
 
 

@@ -44,10 +44,9 @@
         <circle cx="10.6" cy="5.6" r="1.3" fill="currentColor"/>
       </svg>
     </button>
-    <!-- The tag button is created at runtime by src/main.ts, next to this
-         comment. It is not in the markup because it only means anything once
-         the place data has loaded and it can say how many changes are
-         pending. -->
+    <!-- The tag button is created at runtime by src/main.ts, and only in a dev
+         build: surveying is how this map gets its places, not something the
+         published site offers. -->
     <button id="layers-btn" type="button" aria-expanded="false" aria-controls="layers">
       <span class="dots" aria-hidden="true"></span>
       <span class="n"></span>
@@ -79,7 +78,7 @@
         <span id="palette-glyph" aria-hidden="true">›</span>
         <input id="palette-input" type="text" autocomplete="off" autocorrect="off"
                autocapitalize="off" spellcheck="false" enterkeyhint="go"
-               placeholder="hostel · xerox · roll · toto · cha · satellite …"
+               placeholder="hostel · department · xerox · roll · ghat · satellite …"
                aria-label="Search campus" aria-controls="palette-results" aria-expanded="true">
         <span id="palette-timing" aria-hidden="true"></span>
         <button id="palette-close" type="button" aria-label="Close search">&times;</button>

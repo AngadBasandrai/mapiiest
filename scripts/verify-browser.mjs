@@ -338,169 +338,24 @@ async function check(name, width, height) {
     ok(!legacy.badge && !legacy.layer, 'no in-page routing left behind',
        `badge=${legacy.badge} layer=${legacy.layer}`)
 
-    // The editor is on the published site. It was taken off when the campus
-    // survey was thought to be finished, and it is back because the survey
-    // moved outside the wall — so the controls have to be here, and the way in
-    // from a place has to be here too.
+    // Surveying is how this map gets its places, not something the published
+    // site offers. Nothing here may add, change or remove a place or a tag.
     const editable = await page.evaluate(() => ({
       button: !!document.getElementById('tag-btn'),
+      bar: !!document.getElementById('tag-bar'),
       edit: !!document.querySelector('#panel [data-tag-edit]'),
+      del: !!document.querySelector('#panel [data-tag-del]'),
+      places: localStorage.getItem('campusmap.tags.v1'),
+      tags: localStorage.getItem('campusmap.cats.v1'),
     }))
-    ok(editable.button, 'the surveying control is on the published site')
-    ok(editable.edit, 'and a place offers a way in to edit it')
+    ok(!editable.button && !editable.bar, 'no surveying controls on the published site',
+       `button=${editable.button} toolbar=${editable.bar}`)
+    ok(!editable.edit && !editable.del, 'and no edit or delete on a place')
+    ok(editable.places === null && editable.tags === null, 'nothing written to editor storage')
 
     await page.keyboard.press('Escape')
   }
 
-  /* ── the editor ────────────────────────────────────────────────────────── */
-
-  // The two halves of it: place editing, and the tag vocabulary behind it.
-  // Both write to this browser and nowhere else, so the assertions are about
-  // what lands in localStorage and what comes back out of the export.
-  console.log('\neditor')
-  {
-    // Tag mode is a toggle on the header bar, and it turns imagery on — you
-    // cannot outline a building you cannot see.
-    await page.click('#tag-btn')
-    const on = await page.evaluate(() => ({
-      pressed: document.getElementById('tag-btn')?.getAttribute('aria-pressed'),
-      bar: !document.getElementById('tag-bar')?.hidden,
-      tagging: document.body.classList.contains('tagging'),
-      imagery: document.body.classList.contains('imagery'),
-    }))
-    ok(on.pressed === 'true' && on.bar, 'tag mode opens its toolbar',
-       `pressed=${on.pressed} bar=${on.bar}`)
-    ok(on.tagging && on.imagery, 'and puts the photograph under the crosshair')
-
-    // A point inside the survey ring but outside the wall: just south of the
-    // campus bbox, which is the kind of place this whole change exists for.
-    const spot = {
-      lat: campus.meta.bbox[0][1] - 0.002,
-      lon: (campus.meta.bbox[0][0] + campus.meta.bbox[1][0]) / 2,
-    }
-    // A real mouse event, not a dispatched one: MapLibre tracks pointer state
-    // across down and up, and a synthetic MouseEvent pair never registers as a
-    // click at all — which reads here as "tagging is broken" when it is not.
-    const at = await page.evaluate(async ({ lat, lon }) => {
-      const map = window.__map
-      map.jumpTo({ center: [lon, lat], zoom: 17 })
-      await new Promise((r) => setTimeout(r, 150))
-      const pt = map.project([lon, lat])
-      const box = map.getCanvas().getBoundingClientRect()
-      return { x: box.left + pt.x, y: box.top + pt.y }
-    }, spot)
-    await page.mouse.click(at.x, at.y)
-    await new Promise((r) => setTimeout(r, 250))
-    const placed = await page.evaluate(() => ({
-      form: !!document.getElementById('tag-name'),
-    }))
-    ok(placed.form, 'a tap outside the campus wall opens the tag form',
-       `${spot.lat.toFixed(5)}, ${spot.lon.toFixed(5)}`)
-
-    if (placed.form) {
-      // The picker carries the whole vocabulary, grouped.
-      const picker = await page.evaluate(() => {
-        const sel = document.getElementById('tag-cat')
-        return {
-          options: sel?.options.length ?? 0,
-          groups: sel?.querySelectorAll('optgroup').length ?? 0,
-          hasLocality: !!sel?.querySelector('option[value="locality"]'),
-          hasRetired: !!sel?.querySelector('option[value="vending"]'),
-        }
-      })
-      ok(picker.options >= 40, `the picker offers all ${picker.options} tags`)
-      ok(picker.groups >= 4, `grouped into ${picker.groups} headings, not one flat list`)
-      ok(picker.hasLocality && !picker.hasRetired,
-         'the new tags are there and the retired ones are not')
-
-      const saved = await page.evaluate(async () => {
-        document.getElementById('tag-name').value = 'Test Roll Corner'
-        document.getElementById('tag-cat').value = 'street'
-        document.querySelector('[data-tag-save]').click()
-        await new Promise((r) => setTimeout(r, 200))
-        const raw = JSON.parse(localStorage.getItem('campusmap.tags.v1') ?? '[]')
-        const mine = raw.find((t) => t.name === 'Test Roll Corner')
-        return {
-          stored: !!mine,
-          cat: mine?.cat,
-          onMap: window.__map.querySourceFeatures('pois')
-            .some((f) => f.properties?.name === 'Test Roll Corner'),
-        }
-      })
-      ok(saved.stored && saved.cat === 'street', 'it saves to this browser',
-         `cat=${saved.cat}`)
-      ok(saved.onMap, 'and appears on the map straight away')
-    }
-
-    // The tag manager: add a category, and check it reaches the picker, the
-    // legend and the export.
-    const vocab = await page.evaluate(async () => {
-      window.__openCatList()
-      await new Promise((r) => setTimeout(r, 150))
-      const rows = document.querySelectorAll('#panel .tag-row').length
-      document.querySelector('[data-cat-new]')?.click()
-      await new Promise((r) => setTimeout(r, 150))
-      const form = !!document.getElementById('cat-key')
-      if (form) {
-        document.getElementById('cat-label').value = 'Cycle repair wallah'
-        document.getElementById('cat-key').value = 'cyclewallah'
-        document.querySelector('[data-cat-save]').click()
-        await new Promise((r) => setTimeout(r, 200))
-      }
-      const stored = JSON.parse(localStorage.getItem('campusmap.cats.v1') ?? '[]')
-      return {
-        rows, form,
-        added: stored.some((c) => c.key === 'cyclewallah'),
-        chips: [...document.querySelectorAll('#layer-chips .chip')].map((c) => c.dataset.cat),
-      }
-    })
-    ok(vocab.rows >= 40, `the tag manager lists all ${vocab.rows} tags`)
-    ok(vocab.form, 'and offers a form to add one')
-    ok(vocab.added, 'a new tag saves to this browser')
-
-    // An empty tag must not grow a legend chip — that rule is what keeps 40
-    // tags from becoming 40 chips.
-    ok(!vocab.chips.includes('cyclewallah'),
-       'an empty tag grows no legend chip', vocab.chips.join(', '))
-
-    // Removing a tag that has places in it has to move them, not orphan them.
-    const removed = await page.evaluate(async () => {
-      window.__openCatList()
-      await new Promise((r) => setTimeout(r, 150))
-      document.querySelector('[data-cat-del="street"]')?.click()
-      await new Promise((r) => setTimeout(r, 150))
-      const asked = !!document.getElementById('cat-move')
-      if (asked) {
-        document.getElementById('cat-move').value = 'food'
-        document.querySelector('[data-cat-del-go]').click()
-        await new Promise((r) => setTimeout(r, 250))
-      }
-      const tags = JSON.parse(localStorage.getItem('campusmap.tags.v1') ?? '[]')
-      const mine = tags.find((t) => t.name === 'Test Roll Corner')
-      const cats = JSON.parse(localStorage.getItem('campusmap.cats.v1') ?? '[]')
-      return {
-        asked,
-        movedTo: mine?.cat,
-        retired: cats.some((c) => c.key === 'street' && c.deleted),
-        chips: [...document.querySelectorAll('#layer-chips .chip')].map((c) => c.dataset.cat),
-      }
-    })
-    ok(removed.asked, 'removing a tag with places in it asks where they go')
-    ok(removed.movedTo === 'food', 'and moves them there', `now ${removed.movedTo}`)
-    ok(removed.retired, 'the built-in tag is recorded as retired')
-    ok(!removed.chips.includes('street'), 'and its legend chip is gone',
-       removed.chips.join(', '))
-
-    // Leave the browser as it was found, or the next section sees a map with a
-    // test place on it.
-    await page.evaluate(async () => {
-      localStorage.removeItem('campusmap.tags.v1')
-      localStorage.removeItem('campusmap.cats.v1')
-    })
-    await page.reload({ waitUntil: 'networkidle2' })
-    await page.waitForFunction(() => document.getElementById('boot')?.classList.contains('gone'),
-                               { timeout: 20_000 })
-  }
 
   // This site never asks where you are. Directions are a link to Google Maps,
   // which asks for itself, on its own page.

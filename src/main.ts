@@ -7,8 +7,6 @@ import { initPalette, openPalette } from './ui/palette'
 import { initPanel, showPoi, hidePanel } from './ui/panel'
 import { SITE, panBounds } from './config'
 import { registerServiceWorker, watchNetwork } from './ui/install'
-import * as tagger from './ui/tagger'
-import * as vocab from './ui/cats'
 
 const boot = document.getElementById('boot')!
 const base = import.meta.env.BASE_URL
@@ -36,10 +34,12 @@ async function start() {
    * beside it, because the search index, the panel and the tagger all read
    * `campus.categories` and all three must see the same set.
    */
-  const shippedCats = campus.categories
-  const refreshCats = () => { campus.categories = vocab.mergeCategories(shippedCats) }
-  vocab.initCats(campus, () => counts)
-  refreshCats()
+  // Both of these are no-ops in a build. Local edits only exist while the
+  // editor does, so with it gone the shipped set *is* the set, and the shipped
+  // places are the places — but the whole pipeline still reads through these,
+  // so the guard below has one thing to reassign rather than a dozen.
+  let refreshCats = () => {}
+  let mergePlaces = (base: Poi[]): Poi[] => base
 
   /**
    * The committed places with local edits applied. Everything in
@@ -48,7 +48,7 @@ async function start() {
    * session — the editor keeps those changes here until you export them.
    */
   function refreshPoiList() {
-    pois = tagger.applyEdits(campus.pois)
+    pois = mergePlaces(campus.pois)
     byId = new Map(pois.map((p) => [p.id, p]))
     counts = {}
     for (const p of pois) counts[p.cat] = (counts[p.cat] ?? 0) + 1
@@ -355,22 +355,33 @@ async function start() {
 
   /**
    * The tool this map is surveyed with: mark a point, or trace an outline, name
-   * it, and export the lot into data/curated/places.json.
+   * it, and export the lot into data/curated/places.json — plus the tag manager
+   * behind it, which does the same for the vocabulary.
    *
-   * It shipped, then it was taken off again once the campus survey was done,
-   * and now it is back — because the survey was not done. The wall was never
-   * the edge of what a student needs to find, and the locality outside it has
-   * to be walked and tapped the same way the inside was. Alongside it is the
-   * tag manager, which is the other half of the same lesson: the vocabulary
-   * turned out to be as wrong as the coverage.
+   * Back behind the guard. The locality survey it was reopened for is done and
+   * committed: 152 places, and a tag set the survey itself reshaped. A visitor
+   * to the published map has nothing to add with it and no way to keep what
+   * they added, so shipping it only offers work that gets thrown away.
    *
-   * The import is static again. It was dynamic only to keep the module out of a
-   * production build, and the awaited chunk it introduced is what once let the
-   * map's `load` event fire before its own handler on a warm start. That bug is
-   * properly fixed by `whenMapReady`, which stays, but there is no reason to
-   * keep the await that caused it.
+   * `npm run dev` has the whole thing, which is where the next survey happens.
+   * The dynamic import is what keeps that true of a build: a static one would
+   * keep both modules in the bundle whatever this guard said, since they touch
+   * localStorage as they load. The `await` it reintroduces is survivable now —
+   * `whenMapReady` latches the map's `load` event next to the map itself, so a
+   * warm start where the chunk arrives late no longer strands the boot overlay.
    */
+  if (import.meta.env.DEV) {
+  const tagger = await import('./ui/tagger')
+  const vocab = await import('./ui/cats')
+
+  const shippedCats = campus.categories
+  refreshCats = () => { campus.categories = vocab.mergeCategories(shippedCats) }
+  mergePlaces = tagger.applyEdits
+  vocab.initCats(campus, () => counts)
+  refreshCats()
+  refreshPoiList()
   tagger.initTagger(campus)
+  vocab.initCatUi()
   vocab.initCatUi()
 
   let tagMode = false
@@ -614,6 +625,7 @@ async function start() {
   // show the committed places until something else happened to redraw it, and
   // your own changes would look like they had been lost.
   if (tagger.tagCount()) applyEdits()
+  }
 
 
   /* ── chrome ───────────────────────────────────────────────────────────── */

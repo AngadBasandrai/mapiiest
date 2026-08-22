@@ -241,7 +241,7 @@ export class SearchIndex {
     const out = wanted.filter(([cat]) => counts[cat]).map(([, word]) => word)
     // Nothing on the map: suggest the commands, which always exist.
     if (!out.length) {
-      return ['tag mode', 'satellite', 'tags']
+      return import.meta.env.DEV ? ['tag mode', 'satellite', 'tags'] : ['satellite']
     }
     return out.slice(0, 6)
   }
@@ -319,19 +319,25 @@ const ALIASES: Record<string, string[]> = {
 
 interface Action { id: string; title: string; sub: string; words: string }
 
+/**
+ * The editor's commands, in an array of their own so the ternary below folds to
+ * `[]` in a build and the whole thing tree-shakes out. A `dev` flag filtered at
+ * runtime would leave all this wording in the bundle, describing a feature the
+ * published site does not have — which is the same reason main.ts reaches the
+ * modules through a dynamic import rather than a guarded static one.
+ */
+const EDITOR_ACTIONS: Action[] = [
+  { id: 'tag-mode', title: 'Tag mode', sub: 'Tap the map to add or edit a place', words: 'tag add missing new mark edit survey contribute point area outline' },
+  { id: 'places', title: 'Places', sub: 'Every place on the map — edit or export', words: 'places mine saved export json download list changes' },
+  { id: 'tags', title: 'Tags', sub: 'Add, rename or remove a category', words: 'tags categories category vocabulary new colour color layer kind type' },
+  { id: 'tags-clear', title: 'Discard my place changes', sub: 'Clears every unsaved place edit in this browser', words: 'delete remove clear wipe reset discard changes' },
+]
+
 const ACTIONS: Action[] = [
   // "google" and "google maps" are in here on purpose: it is what people type
   // when they mean "show me the actual photo of this place".
   { id: 'imagery', title: 'Satellite imagery', sub: 'Aerial photo under the map', words: 'satellite aerial imagery photo google maps earth view real' },
   { id: 'layers-all', title: 'Show every layer', sub: 'Turn all categories on', words: 'all layers everything show' },
   { id: 'layers-none', title: 'Hide every layer', sub: 'Clear the map', words: 'none clear hide reset layers' },
-
-  // The editor. These used to live behind `import.meta.env.DEV` in an array of
-  // their own, so the ternary would fold to `[]` and take the wording with it.
-  // The survey is running again and past the wall now, so they are simply
-  // commands, and the palette is the fastest way to any of them.
-  { id: 'tag-mode', title: 'Tag mode', sub: 'Tap the map to add or edit a place', words: 'tag add missing new mark edit survey contribute point area outline' },
-  { id: 'places', title: 'Places', sub: 'Every place on the map — edit or export', words: 'places mine saved export json download list changes' },
-  { id: 'tags', title: 'Tags', sub: 'Add, rename or remove a category', words: 'tags categories category vocabulary new colour color layer kind type' },
-  { id: 'tags-clear', title: 'Discard my place changes', sub: 'Clears every unsaved place edit in this browser', words: 'delete remove clear wipe reset discard changes' },
+  ...(import.meta.env.DEV ? EDITOR_ACTIONS : []),
 ]

@@ -777,7 +777,11 @@ body:has(#toast:not([hidden])) #dock { padding-bottom: 46px; }
     bottom: 0;
     z-index: 10;
     max-width: none;
-    max-height: 62svh;
+    /* Tall enough for the legend the survey actually produced. 62svh fitted 21
+       chips and clipped the 28 that came back from the locality pass; the
+       chip box scrolls either way, but a legend you have to scroll to see the
+       end of is one where the last few categories may as well not exist. */
+    max-height: 76svh;
     display: flex;
     flex-direction: column;
     background: var(--bg-1);

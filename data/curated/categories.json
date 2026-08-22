@@ -1,0 +1,66 @@
+{
+  "_source": "survey",
+  "_note": "Exported from the map’s tag manager — the changes against the built-in set in scripts/build-data.mjs, meant to replace this file. A row with deleted:true retires a built-in category.",
+  "items": [
+    {
+      "key": "hangout",
+      "label": "Hangouts",
+      "color": "#ffcafe",
+      "pin": false,
+      "group": "ground"
+    },
+    {
+      "key": "locality",
+      "deleted": true
+    },
+    {
+      "key": "food",
+      "label": "Restaurants",
+      "color": "#f90e12",
+      "pin": true,
+      "group": "food"
+    },
+    {
+      "key": "tea",
+      "label": "Tea stalls",
+      "color": "#ff7808",
+      "pin": false,
+      "group": "food"
+    },
+    {
+      "key": "sweets",
+      "label": "Bakeries",
+      "color": "#b88472",
+      "pin": false,
+      "group": "food"
+    },
+    {
+      "key": "grocery",
+      "label": "Grocery",
+      "color": "#baca0d",
+      "pin": false,
+      "group": "service"
+    },
+    {
+      "key": "stationery",
+      "label": "Printing and Xerox",
+      "color": "#c510c4",
+      "pin": false,
+      "group": "service"
+    },
+    {
+      "key": "gym",
+      "label": "Gyms",
+      "color": "#e08a2e",
+      "pin": false,
+      "group": "service"
+    },
+    {
+      "key": "railwaystation",
+      "label": "Railway Station",
+      "color": "#b0705a",
+      "pin": true,
+      "group": "moving"
+    }
+  ]
+}

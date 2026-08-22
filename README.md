@@ -6,11 +6,9 @@ from OpenStreetMap, aerial imagery under it — and **every place put on it by
 hand**.
 
 No place on it is derived from an OpenStreetMap tag. OSM's coverage here is thin
-enough that auto-classifying it produces a sparse, half-wrong map, so the places
-were surveyed instead — walked, named and recorded against the aerial imagery —
-and the map is exactly as good as that survey. The tool that does the surveying
-is part of the site, not a dev-only build: the campus is done, the locality
-outside the wall is not.
+enough that auto-classifying it produces a sparse, half-wrong map, so the 152
+places were surveyed instead — walked, named and recorded against the aerial
+imagery — and the map is exactly as good as that survey.
 
 ```
 npm install
@@ -27,9 +25,8 @@ npm test           # typecheck + rebuild + smoke test
   to `maps.google.com` for that exact coordinate.
 - **Aerial imagery** under the map, on a toggle — see what is actually there.
 - **Layers** — one per tag, appearing as you survey; a bottom sheet on phones.
-- **Tag it yourself** — mark a point or trace an outline anywhere within a
-  kilometre of the wall, and add or remove the tags themselves. Everything stays
-  in your browser until you export it.
+- **A kilometre past the wall** — the chemist, the roll shop, the toto stand and
+  the ghat are all outside it, so the survey is too.
 - **Buildings are areas.** Departments, offices and labs sit inside one, so a
   building is drawn as a tinted outline with no dot and no label — the places
   inside it carry the names — and clicking anywhere in it opens it. Anything
@@ -67,7 +64,7 @@ MapLibre drops a failed raster tile silently — no error event, nothing in the
 console — so the page has no way to notice on its own. The worker is the only
 thing that sees the failed request, so it posts a message to the page.
 
-### Surveying
+### Surveying (development only)
 
 The places on this map were put there by hand, with a tool built into the app:
 turn on the pin button, then either
@@ -97,10 +94,7 @@ legend chip, which reads as the map losing data. That export is
 built-in set — so a later re-solve of the palette is not silently overridden by
 a file that froze today's colours.
 
-The tool ships. It was taken off the published site once, on the reasoning that
-the survey was finished — and it was not: the wall was never the edge of what a
-student needs to find. See **Surveying** below for what changed and why the
-guard is gone.
+**None of that is part of the published site.** See **Surveying** below.
 
 ## How it is built
 
@@ -169,18 +163,30 @@ is free to use with attribution and needs no key, so it ships working out of the
 box. If you specifically want Google, that means their JS SDK, your own API key,
 and dropping the no-key/offline property of this build.
 
-## Surveying
+## Surveying (development only)
 
 Turn on the pin button, tap the map, name what is there, pick a tag. Records are
 kept in the browser's own storage, listed from `Places` in `Ctrl K`, and
 exported as JSON in exactly the `data/curated/places.json` shape — so committing
-a survey is a paste and a rebuild. Nothing is uploaded and there is no server.
+a survey is a paste and a rebuild. `Tags` does the same for the vocabulary,
+exporting `data/curated/categories.json`. Nothing is uploaded; there is no
+server.
 
-### The tool shipped, then it did not, then it did
+**That tool is not part of the published site.** The button, the toolbar, the
+commands, the edit controls, the tag manager and both modules behind them are
+dropped from a production build, guarded by `import.meta.env.DEV` in
+`src/main.ts`. The guard is a dynamic `import()` rather than a flag around a
+static one, because a static import would keep the modules in the bundle no
+matter what — they touch `localStorage` as they load, so nothing can tree-shake
+them away. `npm run build` has no trace of it: one JS chunk, 832 kB against 858,
+and none of its strings. The smoke and browser tests both assert that.
 
-It was taken off the published site once, guarded behind `import.meta.env.DEV`,
-on the reasoning that the campus survey was finished and committed. That was
-wrong in a way worth recording, because it is the same mistake twice:
+### It came off, went back, and came off again
+
+Worth recording, because the middle step is where the map got most of what it
+now has. The tool was first guarded on the reasoning that the campus survey was
+finished and committed. It was not — not because the campus was incomplete, but
+because the campus was the wrong boundary:
 
 - **The wall is not the edge of the map.** A student's chemist, roll shop, toto
   stand, xerox counter and ghat are all on the other side of it. A map that
@@ -188,15 +194,20 @@ wrong in a way worth recording, because it is the same mistake twice:
 - **The vocabulary was not finished either.** Five of the twenty-six categories
   never held a single place — `print`, `water`, `toilet`, `vending`,
   `transport` — while there was nowhere at all to file a sweet shop. A
-  vocabulary you cannot change is one you work around, and people work around
-  it by filing things under whatever is closest, which quietly makes the map
-  worse.
+  vocabulary you cannot change is one people work around, by filing things
+  under whatever is closest, which quietly makes the map worse.
 
-So the guard is gone and the import is static again. The dynamic `import()` only
-ever existed to keep the module out of a production build, and the `await` it
-introduced is what once made the map's `load` event fire before its own handler
-on a warm start — that bug is properly fixed by `whenMapReady` in
-`src/main.ts`, which stays.
+Reopening it produced 152 places from 137, and a tag set the survey reshaped as
+it went: fourteen locality tags added, one (`locality`) retired for going unused
+after all, two more (`gym`, `railwaystation`) added from inside the app, and six
+renamed to what people actually call them. That done, it is guarded again — a
+visitor to the published map has nothing to add with it and no way to keep what
+they add, so shipping it only offers work that gets thrown away.
+
+To add or correct a place now, run the dev server, tag it, and paste the export
+back — or edit `data/curated/places.json` directly. Anything real and permanent
+is better off in OpenStreetMap itself; every tag form links straight into the
+OSM editor at that spot.
 
 ### The survey area
 
@@ -219,10 +230,10 @@ covers the campus and its immediate surroundings, which is what `data/raw/`
 holds; outside that, the aerial imagery is the basemap, and it is on by default.
 Everything in the locality is hand-surveyed on top of the photograph.
 
-To add or correct a place, tag it in the app and paste the export in — or edit
-`data/curated/places.json` directly. Anything real and permanent is better off
-in OpenStreetMap itself; every tag form links straight into the OSM editor at
-that spot.
+One row exceeds the ring on purpose and the build says so: the Botanical
+Garden's outline runs about 0.9 km past the western edge, because the garden is
+110 hectares and the ring is not. Its marker is inside, so it draws and searches
+normally — the warning is the build noticing, not the survey being wrong.
 
 ## How it is built
 
@@ -256,29 +267,34 @@ Each tagged feature is classified into exactly one category by `classify()` in
 
 ## Tags
 
-Forty of them, in five groups. The groups exist only to sort the picker in the
-editor — forty in one flat dropdown is a list nobody reads to the end of.
+Forty-one, in five groups, of which **28 have anything in them**. The groups
+exist only to sort the picker in the editor — forty-one in one flat dropdown is
+a list nobody reads to the end of.
 
 | group | tags |
 | --- | --- |
 | **On campus** | Buildings · Depts & labs · Lecture halls · Libraries · Admin & help · Clubs & activities · Halls & hostels · Staff quarters · Messes · Canteens · Sports · Gates · Abandoned |
-| **Ground & landmarks** | Landmarks · Lakes & ponds · Parks & gardens · Worship · Localities & paras · Hangouts & adda |
-| **Food & drink** | Restaurants & dhabas · Street food & rolls · Tea stalls & cafes · Sweets & bakeries |
-| **Shops & services** | Shops · Grocery & kirana · Stationery & xerox · Pharmacies · Health · Repairs & spares · Salons & barbers · Clothes & tailors · Laundry · Markets & bazaars · ATMs & banks · Schools & coaching · PG & rentals |
-| **Getting around** | Buses, autos & totos · Ferry ghats · Petrol pumps · Cycle parking |
+| **Ground & landmarks** | Landmarks · Lakes & ponds · Parks & gardens · Worship · Hangouts |
+| **Food & drink** | Restaurants · Street food & rolls · Tea stalls · Bakeries |
+| **Shops & services** | Shops · Grocery · Printing and Xerox · Pharmacies · Health · Repairs & spares · Salons & barbers · Clothes & tailors · Laundry · Markets & bazaars · ATMs & banks · Schools & coaching · PG & rentals · Gyms |
+| **Getting around** | Buses, autos & totos · Ferry ghats · Petrol pumps · Cycle parking · Railway Station |
 
-Fourteen of those are new, and five went the other way — `print`, `water`,
-`toilet`, `vending` and `transport` never held a single place and are gone. The
-new ones are what a locality survey actually runs into: food splits four ways
-because a student chooses between sitting down, standing with a roll, nursing a
-cha and buying mishti; `shop` fans out because outside the wall "shop" is most
-of what there is to map, and a kirana and a chemist being the same purple dot
-helps nobody. **Localities & paras** is the one that only makes sense off
-campus — "meet me at Kadamtala" is an address in Howrah in a way a street name
-is not.
+Most of the second half of that list is new, and five went the other way —
+`print`, `water`, `toilet`, `vending` and `transport` never held a single place
+and are gone. The new ones are what a locality survey actually runs into: food
+splits four ways because a student chooses between sitting down, standing with a
+roll, nursing a cha and buying mishti; `shop` fans out because outside the wall
+"shop" is most of what there is to map, and a kirana and a chemist being the
+same purple dot helps nobody.
 
-None of that list is fixed. **Tags** in `Ctrl K` adds, renames, recolours and
-removes them, exporting to `data/curated/categories.json`; see **Surveying**.
+**Gyms** and **Railway Station** were added from inside the app mid-survey,
+which is the tag manager doing its job — neither was foreseen when the built-in
+set was written. **Localities & paras** went the other way: added for "meet me
+at Kadamtala", never used, retired.
+
+The built-in set lives in `CATEGORIES` in `scripts/build-data.mjs`;
+`data/curated/categories.json` layers over it and is written by the editor's tag
+manager, so changing the vocabulary has never meant editing code.
 
 Order matters in `classify()`: **Abandoned** is tested first, so a derelict
 lecture hall does not send anyone looking for a lecture; **Lakes** are tested
@@ -321,10 +337,14 @@ What no palette can do is survive colour blindness; no set of thirty-nine can.
 Identity never rests on colour alone — pinned places carry their name on the
 map, the legend chip names its tag, and clicking a dot opens its name.
 
-The smoke test holds the floors. A tag added by hand from the tag manager is
-*not* held to them: the form warns when a colour lands close to one in use and
-lets it through anyway, because a survey stopping to argue about colour is worse
-than two dots that look alike.
+The smoke test holds the floor, but only over the **solved** tags. A tag
+coloured by hand from the tag manager is held to no colour rule at all: the form
+warns when a pick lands close to one in use and lets it through, because a
+survey stopping to argue about colour is worse than two dots that look alike —
+and a red build over somebody's choice of swatch is worse than both. Those
+clashes are reported by the smoke test instead of failing it. There is currently
+one: `Bakeries` and `Railway Station` sit at ΔE 5.5, which is legible mostly
+because the station is a single pinned place carrying its own name.
 
 The map's centre and opening frame are **derived from the boundary** at build
 time, not configured; the pan limits come from the survey area around it. Point
@@ -390,10 +410,10 @@ every element id the TypeScript reaches for exists in `index.html` — that
 mismatch otherwise ships as a blank page.
 
 It bundles the modules with `import.meta.env.DEV` defined as `false`, so what it
-tests is the shape the public gets — which is how the assertions that the editor
-commands *are* present mean anything. Two things it checks the absence of: no
-place derived from an OSM tag while `places.fromOsm` is off, no OSM building
-layer in `geo.json`, and no trace of the five retired tags.
+tests is the shape the public gets. Four things it deliberately checks the
+*absence* of: no place derived from an OSM tag while `places.fromOsm` is off, no
+OSM building layer in `geo.json`, no trace of the five retired tags, and no
+editor command anywhere in the index.
 
 `npm run verify` drives the built site in headless Chrome at two viewports and
 fails on any console error, failed request, or map that never painted. It also
@@ -402,16 +422,14 @@ with every place, its labels and a working search** — the only check that can
 tell a real offline app from a manifest and good intentions. It picks a real
 place out of the current data, searches it, opens it, checks its Google Maps
 link carries that place's own coordinates, toggles the imagery layer, and
-confirms the page never asks for your location and carries no theme toggle.
+confirms the page never asks for your location, carries no theme toggle, and
+offers no way to edit anything.
 
-It then drives the editor end to end: turns on tag mode, **clicks a point
-outside the campus wall and requires the form to open there**, checks the picker
-carries all forty tags grouped and none of the retired ones, saves a place and
-finds it on the map, adds a tag from the tag manager, and removes one that has
-places in it — requiring that it asks where they go and actually moves them.
-The click is a real `page.mouse.click`, not a dispatched `MouseEvent`: MapLibre
-tracks pointer state across down and up, and a synthetic pair never registers as
-a click at all, which reads as "tagging is broken" when it is not.
+It also proves the editor is not there: no tag button, no toolbar, no edit or
+delete on a place, and nothing written to either storage key. The pass that
+drove the editor end to end — tapping outside the wall, adding a tag, moving
+places out of a removed one — went with the guard, and lives in this file's
+history for the next survey to restore.
 
 It needs a server on `:5180` (`npx vite preview`) and a Chrome on `PATH` or
 `CHROME_PATH`; `--url` points it at any other origin, including the live site.

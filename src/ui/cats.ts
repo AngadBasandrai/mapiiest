@@ -280,10 +280,19 @@ export function showCatForm(key?: string) {
 
   const groups = groupsOf()
   const chosen = cur?.color ?? CAT_COLORS[0]![0]
-  const swatches = CAT_COLORS.map(([hexv, name]) =>
-    `<button type="button" class="swatch${hexv.toLowerCase() === chosen.toLowerCase() ? ' on' : ''}"
-             data-cat-tint="${hexv}" style="background:${hexv}"
-             title="${esc(name)}" aria-label="${esc(name)}"></button>`).join('')
+
+  // The tag's current colour leads, and it is only in CAT_COLORS if the tag was
+  // made here — a built-in carries a solved hex from the palette, which is
+  // deliberately nowhere near these twelve. Without this row nothing would be
+  // selected when you open a built-in, and `save` would fall through to the
+  // first swatch: renaming "Grocery & kirana" to "Grocery" silently repainted
+  // it vermilion. Six tags went the same colour that way before it was caught.
+  const inScheme = CAT_COLORS.some(([h]) => h.toLowerCase() === chosen.toLowerCase())
+  const swatches = [...(inScheme ? [] : [[chosen, 'Its colour now'] as [string, string]]), ...CAT_COLORS]
+    .map(([hexv, name]) =>
+      `<button type="button" class="swatch${hexv.toLowerCase() === chosen.toLowerCase() ? ' on' : ''}"
+               data-cat-tint="${hexv}" style="background:${hexv}"
+               title="${esc(name)}" aria-label="${esc(name)}"></button>`).join('')
 
   const inUse = key ? (counts()[key] ?? 0) : 0
 
@@ -367,8 +376,10 @@ function save() {
   const key = (editing ?? keyEl.value.trim().toLowerCase())
   const group = (document.getElementById('cat-group') as HTMLSelectElement).value
   const pin = (document.getElementById('cat-pin') as HTMLInputElement).checked
+  // Falling back to the tag's own colour, not to the first swatch: a fallback
+  // that silently repaints is worse than one that changes nothing.
   const color = (document.querySelector('#cat-tints .swatch.on') as HTMLElement | null)
-    ?.dataset.catTint ?? CAT_COLORS[0]![0]
+    ?.dataset.catTint ?? (editing ? mergeCategories(base)[editing]?.color : null) ?? CAT_COLORS[0]![0]
 
   const bad = (el: HTMLInputElement) => { el.focus(); el.classList.add('bad') }
   if (!label) return bad(labelEl)
