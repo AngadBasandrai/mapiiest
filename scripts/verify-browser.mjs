@@ -200,6 +200,61 @@ async function check(name, width, height) {
   ok(attrib?.visible && /openstreetmap\.org/.test(attrib.href ?? ''),
      'OpenStreetMap attribution is present and visible', attrib?.href ?? 'missing')
 
+  // The donation strip owns the bottom edge, which is the busiest strip of the
+  // viewport: the attribution, the legend dock, the thumb search bar and
+  // MapLibre's own zoom control all live there. Everything else is measured off
+  // `--floor`, so the check that matters is that nothing lands on top of it.
+  const strip = await page.evaluate(() => {
+    const el = document.getElementById('donate')
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    const runs = [...el.querySelectorAll('.run')]
+    const box = (sel) => {
+      const n = document.querySelector(sel)
+      if (!n) return null
+      const c = getComputedStyle(n)
+      if (c.display === 'none' || c.visibility === 'hidden') return null
+      const b = n.getBoundingClientRect()
+      return b.width && b.height ? b : null
+    }
+    const hits = ['#attrib', '#dock', '#open-search', '.maplibregl-ctrl-bottom-right']
+      .filter((sel) => {
+        const o = box(sel)
+        return o && !(o.bottom <= r.top || o.top >= r.bottom ||
+                      o.right <= r.left || o.left >= r.right)
+      })
+    return {
+      href: el.getAttribute('href'),
+      label: el.getAttribute('aria-label') ?? '',
+      flush: Math.round(r.bottom) === document.documentElement.clientHeight,
+      full: Math.round(r.left) === 0 && Math.round(r.right) === document.documentElement.clientWidth,
+      anim: getComputedStyle(el.querySelector('.ticker')).animationName,
+      runs: runs.length,
+      // Two runs of equal width is what makes the -50% loop seamless; if they
+      // ever drift apart the strip jumps once per cycle.
+      even: runs.length === 2 &&
+        Math.abs(runs[0].getBoundingClientRect().width - runs[1].getBoundingClientRect().width) < 1,
+      // A run narrower than the viewport leaves a visible gap mid-cycle.
+      covers: runs[0] ? runs[0].getBoundingClientRect().width >= document.documentElement.clientWidth : false,
+      overlaps: hits,
+      // The marquee is decorative; the accessible name carries the message.
+      hidden: el.querySelector('.ticker')?.getAttribute('aria-hidden') === 'true',
+    }
+  })
+  ok(!!strip, 'the donation strip is on the page')
+  if (strip) {
+    ok(/^mailto:/.test(strip.href ?? ''), 'it is a mailto link', strip.href)
+    ok(/donate/i.test(strip.label) && strip.label.includes('@'),
+       'with the whole message as its accessible name', `${strip.label.slice(0, 48)}…`)
+    ok(strip.hidden, 'and the scrolling copy is hidden from assistive tech')
+    ok(strip.flush && strip.full, 'it spans the bottom edge',
+       `flush=${strip.flush} full=${strip.full}`)
+    ok(strip.anim === 'ticker', 'the marquee animates', strip.anim)
+    ok(strip.even && strip.covers, 'its two runs loop seamlessly',
+       `runs=${strip.runs} even=${strip.even} widerThanViewport=${strip.covers}`)
+    ok(strip.overlaps.length === 0, 'nothing sits on top of it', strip.overlaps.join(', '))
+  }
+
   // In dock mode the chips sit loose at the bottom-left and must stay clear of
   // the attribution in the opposite corner. In sheet mode the legend is an
   // overlay that covers everything on purpose, so the check does not apply.

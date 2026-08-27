@@ -31,6 +31,8 @@ npm test           # typecheck + rebuild + smoke test
   building is drawn as a tinted outline with no dot and no label — the places
   inside it carry the names — and clicking anywhere in it opens it. Anything
   else can carry an outline too, and keeps its dot and label on top.
+- **A donation strip** along the bottom edge — one sentence, scrolling, that
+  stops the moment you point at it and opens a mail draft when you click.
 - **One dark ground.** There was a light theme and a toggle; it is gone. This is
   a map read over aerial photography, and the light twin cost a second set of
   every basemap colour, a dimmed derivation of all 39 category colours, and a
@@ -391,6 +393,35 @@ someone stood at, or an `anchor` naming an OSM feature to sit beside. Nothing in
 there is a guess; a plausible invention on a map is worse than a gap. The
 surveying tool writes exactly this format, so the loop was: imagery on → tag as
 you walk → export → paste → rebuild.
+
+## The donation strip
+
+A marquee, which is a thing to be careful with rather than a thing to avoid. The
+three rules that make this one bearable:
+
+- **It stops when pointed at.** `:hover` and `:focus-within` both pause it, so
+  the text can be read and the link can be clicked rather than chased.
+- **It is one sentence that never changes**, so nobody has to wait for a cycle
+  to catch up on what they missed.
+- **`prefers-reduced-motion` kills it dead** and leaves a single static copy
+  that scrolls by hand. Motion is the negotiable part; the message is not.
+
+Structurally it is one `<a href="mailto:">` wrapping the whole strip, carrying
+the message as its `aria-label`, with the scrolling copy `aria-hidden`. That way
+there is exactly one focusable thing with a complete accessible name, instead of
+a link buried inside moving text that a keyboard user would have to catch.
+
+The loop is two identical runs translated by `-50%`, which lands the second
+exactly where the first began — no seam, no reset flicker. Each run repeats the
+sentence four times so it stays wider than any plausible viewport; a run
+narrower than the screen would show a gap mid-cycle. The browser test asserts
+both: that the runs are equal width, and that one is wider than the viewport.
+
+It owns the bottom edge, which was already the busiest strip of the window — the
+attribution, the legend dock, the thumb search bar and MapLibre's zoom control
+all live there. They are all measured off a `--floor` token now (`--pad` plus
+the strip's height) rather than off the window, and the browser test checks that
+none of them lands on top of it at either viewport.
 
 ## Not here
 
