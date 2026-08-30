@@ -14,7 +14,7 @@
   },
   "analytics": {
     "_note": "GoatCounter site code — the subdomain of your <code>.goatcounter.com dashboard, nothing more. Empty means no analytics at all and no second external request, which is how this repo ships. Cookieless and consent-free by design; see src/ui/analytics.ts for exactly what it does and does not send.",
-    "goatcounter": ""
+    "goatcounter": "angadbasandrai"
   },
   "survey": {
     "_note": "How far past the campus wall a place may be tagged, in kilometres. The wall is not the edge of the map any more — the chemist, the roll shop and the toto stand are all outside it — but something has to reject a fat-fingered tap two districts away, and this is it. Framing still opens on the campus itself; this only governs how far you may pan-and-tag, and what the build accepts.",
