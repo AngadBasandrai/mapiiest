@@ -17,6 +17,8 @@ export const SITE = site as {
   tagline: string
   repo: string
   osm: { campusWay: number; wikidata: string; bbox: string }
+  /** Absent or empty disables analytics entirely — see src/ui/analytics.ts. */
+  analytics?: { goatcounter?: string }
 }
 
 export const OSM_CAMPUS_URL = `https://www.openstreetmap.org/way/${SITE.osm.campusWay}`

@@ -149,9 +149,11 @@ fetched from OSM for the survey ring, so the locality is photograph plus
 whatever has been hand-surveyed onto it. Tag mode turns imagery on for that
 reason — you cannot outline a building you cannot see.
 
-Those tiles are the **only** request this site makes to anywhere else — and
-because the layer is on by default, that request now happens on every load
-rather than on demand. Everything else is served from this origin.
+Those tiles are one of only two requests this site makes to anywhere else — and
+because the layer is on by default, that request happens on every load rather
+than on demand. The other is the pageview beacon, which is off unless you
+configure it; see **Analytics** below. Everything else is served from this
+origin.
 
 Labels get their own treatment over the photo: the grey-on-dark pairing is tuned
 for a flat surface of known lightness, and a photo is bright green, white roof
@@ -394,6 +396,45 @@ there is a guess; a plausible invention on a map is worse than a gap. The
 surveying tool writes exactly this format, so the loop was: imagery on → tag as
 you walk → export → paste → rebuild.
 
+## Analytics
+
+Off by default, and off in this repo. `site.config.json` carries the switch:
+
+```json
+"analytics": { "goatcounter": "" }
+```
+
+Put a [GoatCounter](https://www.goatcounter.com) site code in there — the
+subdomain of your dashboard, nothing more — and the site starts counting
+pageviews. Leave it empty and no second external request is ever made, which is
+the state this ships in.
+
+GoatCounter rather than Google Analytics, for reasons that are mostly about what
+this site already is. It sets **no cookies**, keeps no identifier that survives
+the request, and therefore needs **no consent banner** under GDPR or India's
+DPDP Act — where GA would need one, plus ~90 kB of script, on a map whose whole
+point is that it works offline and asks for nothing. It is free for
+non-commercial use, open source, and self-hostable if the hosted service ever
+goes away.
+
+`src/ui/analytics.ts` is the whole of it, and it is deliberately small:
+
+- **One beacon per page load.** It never sees what was searched, which place was
+  opened, or which layers were toggled. The editor's data never leaves the
+  browser and neither does anything else.
+- **Never counts you.** It is skipped in a dev build *and* on localhost — the
+  second matters because `npm run verify` drives a production bundle, so
+  `import.meta.env.DEV` alone would count every test run as a visitor.
+- **Honours Do Not Track** and Global Privacy Control, client-side, because
+  GoatCounter does not do it for us.
+- **Fails silently.** Blocked by an extension or offline, the script load error
+  is swallowed — the browser test fails on console errors, and more to the
+  point it is not the visitor's problem.
+
+Expect it to undercount. Every client-side analytics host is on somebody's
+blocklist, and this site's audience is engineering students; treat the numbers
+as a floor, not a census.
+
 ## The donation strip
 
 A marquee, which is a thing to be careful with rather than a thing to avoid. The
@@ -537,8 +578,8 @@ to it, so existing links keep working.
 
 Everything campus-specific is in `site.config.json`: the display name, the
 wordmark, the repo link, the OSM way id plus bbox used by the fetch, the
-`places.fromOsm` switch above, and `survey.radiusKm` — how far past the wall a
-place may be tagged.
+`places.fromOsm` switch above, `survey.radiusKm` — how far past the wall a place
+may be tagged — and `analytics.goatcounter`, which is empty and therefore off.
 
 The tag vocabulary is not in there. It lives in `CATEGORIES` in
 `scripts/build-data.mjs` as a starting point, with `data/curated/categories.json`

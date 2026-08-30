@@ -7,6 +7,7 @@ import { initPalette, openPalette } from './ui/palette'
 import { initPanel, showPoi, hidePanel } from './ui/panel'
 import { SITE, panBounds } from './config'
 import { registerServiceWorker, watchNetwork } from './ui/install'
+import { initAnalytics } from './ui/analytics'
 
 const boot = document.getElementById('boot')!
 const base = import.meta.env.BASE_URL
@@ -350,6 +351,11 @@ async function start() {
   // dimmed fills over nothing.
   registerServiceWorker()
   watchNetwork({ imageryOn: () => imagery, setImagery })
+
+  // Counted here rather than from a tag in the markup, because the guards that
+  // matter — dev build, localhost, Do Not Track — are all in that module, and a
+  // script tag in index.html would have fired before any of them ran.
+  initAnalytics()
 
   /* ── surveying ────────────────────────────────────────────────────────── */
 

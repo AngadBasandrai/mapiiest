@@ -72,9 +72,12 @@ async function check(name, width, height) {
   const failed = []
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
-  // Aerial tiles are a third-party, opt-in extra: a slow or blocked tile server
-  // must not fail the build for the site's own assets.
-  const ours = (url) => !url.includes('arcgisonline.com')
+  // Aerial tiles and the pageview beacon are the two third-party requests this
+  // site makes, and neither is load-bearing: a slow tile server or an analytics
+  // host blocked by an extension must not fail the build for the site's own
+  // assets. Everything else that fails is ours and is a real failure.
+  const THIRD_PARTY = ['arcgisonline.com', 'gc.zgo.at', 'goatcounter.com']
+  const ours = (url) => !THIRD_PARTY.some((h) => url.includes(h))
   page.on('requestfailed', (r) => {
     if (ours(r.url())) failed.push(`${r.url()} ${r.failure()?.errorText}`)
   })
@@ -241,6 +244,17 @@ async function check(name, width, height) {
       hidden: el.querySelector('.ticker')?.getAttribute('aria-hidden') === 'true',
     }
   })
+  // Analytics must not count the people building the site. This run is a
+  // production bundle — `import.meta.env.DEV` is false — served from
+  // localhost, so the hostname guard is the one being tested here, and it is
+  // the one that matters: without it every `npm run verify` is a visitor.
+  const counted = await page.evaluate(() => ({
+    tag: !!document.querySelector('script[data-goatcounter], script[src*="goatcounter"]'),
+    global: typeof window.goatcounter !== 'undefined',
+  }))
+  ok(!counted.tag && !counted.global, 'no pageview counted from localhost',
+     `tag=${counted.tag} global=${counted.global}`)
+
   ok(!!strip, 'the donation strip is on the page')
   if (strip) {
     ok(/^mailto:/.test(strip.href ?? ''), 'it is a mailto link', strip.href)
